@@ -22,12 +22,19 @@
   You should have received a copy of the GNU General Public License
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
+#ifndef CONFIG_IDF_TARGET_ESP32S3
  
  
-#if __has_include("esp32/rom/uart.h")
-  #include "esp32/rom/uart.h"
-#else
-  #include "rom/uart.h"
+#if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32H2
+#include "esp32h2/rom/lldesc.h"
 #endif
 #include "soc/uart_reg.h"
 #include "soc/uart_struct.h"
@@ -480,3 +487,4 @@ bool SerialPortTerminalConnector::rxReadyCallback(void * args, bool fromISR)
 } // end of namespace
 
 
+#endif

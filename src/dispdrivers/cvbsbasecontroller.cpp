@@ -23,6 +23,7 @@
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 
 #include <alloca.h>
@@ -237,3 +238,4 @@ bool CVBSBaseController::suspendDoubleBuffering(bool value)
 } // end of namespace
 
 
+#endif

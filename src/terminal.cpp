@@ -174,7 +174,9 @@ int Terminal::keyboardReaderTaskStackSize = FABGLIB_DEFAULT_TERMINAL_KEYBOARD_RE
 Terminal::Terminal()
   : m_canvas(nullptr),
     m_mutex(nullptr),
+    #ifndef CONFIG_IDF_TARGET_ESP32S3
     m_soundGenerator(nullptr),
+    #endif
     m_sprites(nullptr),
     m_spritesCount(0)
 {
@@ -188,10 +190,10 @@ Terminal::~Terminal()
   // end() called?
   if (m_mutex)
     end();
-
+  #ifndef CONFIG_IDF_TARGET_ESP32S3
   if (m_soundGenerator)
     delete m_soundGenerator;
-
+  #endif
   freeSprites();
 }
 
@@ -322,10 +324,12 @@ bool Terminal::begin(BaseDisplayController * displayController, int maxColumns, 
   }
 
   m_keyboard = keyboard;
+  #ifndef CONFIG_IDF_TARGET_ESP32S3
   if (m_keyboard == nullptr && PS2Controller::initialized()) {
     // get default keyboard from PS/2 controller
     m_keyboard = PS2Controller::keyboard();
   }
+  #endif
 
   m_logStream = nullptr;
 
@@ -2157,7 +2161,9 @@ void Terminal::execCtrlCode(uint8_t c)
 
     // BELL
     case ASCII_BEL:
+#ifndef CONFIG_IDF_TARGET_ESP32S3
       sound('1', 800, 250, 100);  // square wave, 800 Hz, 250ms, volume 100
+#endif
       break;
 
     // XOFF
@@ -3228,6 +3234,7 @@ void Terminal::consumeOSC()
   }
 }
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 SoundGenerator * Terminal::soundGenerator()
 {
@@ -3261,7 +3268,7 @@ void Terminal::sound(int waveform, int frequency, int duration, int volume)
       break;
   }
 }
-
+#endif
 
 // get a single byte from getNextCode() or m_extNextCode
 uint8_t Terminal::extGetByteParam()
@@ -3733,6 +3740,7 @@ void Terminal::consumeFabGLSeq()
       break;
     }
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     // Sound
     // Seq:
     //    ESC FABGLEXT_STARTCODE FABGLEXTX_SOUND WAVEFORM ';' FREQUENCY ';' DURATION ';' VOLUME FABGLEXT_ENDCODE
@@ -3754,6 +3762,7 @@ void Terminal::consumeFabGLSeq()
       sound(waveform, frequency, duration, volume);
       break;
     }
+#endif
 
     // Begin of a graphics command
     // Seq:
@@ -3762,6 +3771,7 @@ void Terminal::consumeFabGLSeq()
       consumeFabGLGraphicsSeq();
       break;
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     // Show or hide mouse pointer
     // Seq:
     //    ESC FABGLEXT_STARTCODE FABGLEXTX_SHOWMOUSE VALUE FABGLEXT_ENDCODE
@@ -3828,6 +3838,7 @@ void Terminal::consumeFabGLSeq()
       }
       break;
     }
+#endif
 
     // Delay for milliseconds (return FABGLEXT_REPLYCODE when time is elapsed)
     // Seq:

@@ -23,7 +23,6 @@
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #pragma once
 
 

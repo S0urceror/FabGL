@@ -22,6 +22,7 @@
   You should have received a copy of the GNU General Public License
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 
 
@@ -874,3 +875,4 @@ bool TFTController::suspendDoubleBuffering(bool value)
 
 
 } // end of namespace
+#endif

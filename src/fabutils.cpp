@@ -151,6 +151,7 @@ uint32_t msToTicks(int ms)
 ChipPackage getChipPackage()
 {
   // read CHIP_VER_PKG (block0, byte 3, 105th bit % 32 = 9, 3 bits)
+  #ifdef EFUSE_BLK0_RDATA3_REG
   uint32_t ver_pkg = (REG_READ(EFUSE_BLK0_RDATA3_REG) >> 9) & 7;
   switch (ver_pkg) {
     case 0:
@@ -164,6 +165,9 @@ ChipPackage getChipPackage()
     default:
       return ChipPackage::Unknown;
   }
+  #else
+    return ChipPackage::Unknown;
+  #endif
 }
 
 #endif
@@ -1258,7 +1262,7 @@ bool FileBrowser::mountSDCard(bool formatOnFail, char const * mountPath, size_t 
   s_SDCardMounted            = false;
 
   sdmmc_host_t host = SDSPI_HOST_DEFAULT();
-  host.slot = HSPI_HOST;
+  host.slot = 1;//HSPI_HOST;
 
   #if FABGL_ESP_IDF_VERSION <= FABGL_ESP_IDF_VERSION_VAL(3, 3, 5)
 

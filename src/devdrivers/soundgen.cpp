@@ -24,6 +24,7 @@
  */
 
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 
 #include "freertos/FreeRTOS.h"
@@ -882,3 +883,4 @@ void play_task(void*arg)
 
 } // end of namespace
 
+#endif

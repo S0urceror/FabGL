@@ -323,6 +323,7 @@
 #include "dispdrivers/vga16controller.h"
 #include "dispdrivers/vgadirectcontroller.h"
 #include "dispdrivers/cvbs16controller.h"
+#include "dispdrivers/vgacontrollers3.h"
 #include "fabui.h"
 #include "inputbox.h"
 #include "comdrivers/ps2controller.h"

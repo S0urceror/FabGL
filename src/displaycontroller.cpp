@@ -447,11 +447,11 @@ void BitmappedDisplayController::addPrimitive(Primitive & primitive)
     primitiveReplaceDynamicBuffers(primitive);
     xQueueSendToBack(m_execQueue, &primitive, portMAX_DELAY);
 
-    if (m_doubleBufferedEnabled) {
       // wait notify from PrimitiveCmd::SwapBuffers executor
-      ulTaskNotifyTake(true, portMAX_DELAY);
-    }
-
+      if (m_doubleBufferedEnabled) {
+        ulTaskNotifyTake(true, portMAX_DELAY);
+      }
+      
   } else {
     Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
     execPrimitive(primitive, updateRect, false);

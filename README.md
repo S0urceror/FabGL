@@ -1,6 +1,8 @@
 # FabGL
 ### **ESP32** Display Controller (VGA, Color NTSC/PAL Composite, I2C and SPI displays), PS/2 Mouse and Keyboard Controller, Graphics Library, Sound Engine, Graphical User Interface (GUI), Game/Emulation Engine and ANSI/VT Terminal
 
+**!!Define ```CONFIG_IDF_TARGET_ESP32S3``` to compile for ESP32 S3!!**
+
 **[Please look here for full API documentation](http://www.fabglib.org)**
 
 **[See also my youtube channel where you can find demos and tutorials](https://www.youtube.com/user/fdivitto/videos)**

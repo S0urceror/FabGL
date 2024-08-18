@@ -44,9 +44,18 @@
 #include <driver/adc.h>
 #include <esp_system.h>
 #include "sdmmc_cmd.h"
-#include "soc/frc_timer_reg.h"
-#include "rom/lldesc.h"
-
+// #include "soc/frc_timer_reg.h"
+#if CONFIG_IDF_TARGET_ESP32
+#include "esp32/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+#include "esp32s2/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "esp32s3/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32C3
+#include "esp32c3/rom/lldesc.h"
+#elif CONFIG_IDF_TARGET_ESP32H2
+#include "esp32h2/rom/lldesc.h"
+#endif
 #ifdef ARDUINO
 #include "Arduino.h"
 #endif
@@ -1099,7 +1108,7 @@ uint32_t getCPUFrequencyMHz();
 
 
 // FRC1 timer has 23 bits (8388608 values)
-constexpr int FRC1TimerMax = 8388607;
+// constexpr int FRC1TimerMax = 8388607;
 
 
 #ifdef FABGL_EMULATED
@@ -1133,19 +1142,19 @@ inline uint32_t FRC1Timer()
 
 #else
 
-// prescaler: FRC_TIMER_PRESCALER_1, FRC_TIMER_PRESCALER_16, FRC_TIMER_PRESCALER_256
-// 80Mhz / prescaler = timer frequency
-inline void FRC1Timer_init(int prescaler)
-{
-  REG_WRITE(FRC_TIMER_LOAD_REG(0), 0);
-  REG_WRITE(FRC_TIMER_CTRL_REG(0), prescaler | FRC_TIMER_ENABLE);
-}
+// // prescaler: FRC_TIMER_PRESCALER_1, FRC_TIMER_PRESCALER_16, FRC_TIMER_PRESCALER_256
+// // 80Mhz / prescaler = timer frequency
+// inline void FRC1Timer_init(int prescaler)
+// {
+//   REG_WRITE(FRC_TIMER_LOAD_REG(0), 0);
+//   REG_WRITE(FRC_TIMER_CTRL_REG(0), prescaler | FRC_TIMER_ENABLE);
+// }
 
 
-inline uint32_t FRC1Timer()
-{
-  return FRC1TimerMax - REG_READ(FRC_TIMER_COUNT_REG(0)); // make timer count up
-}
+// inline uint32_t FRC1Timer()
+// {
+//   return FRC1TimerMax - REG_READ(FRC_TIMER_COUNT_REG(0)); // make timer count up
+// }
 
 #endif
 

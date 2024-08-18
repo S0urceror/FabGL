@@ -23,6 +23,7 @@
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 #include <strings.h>
 
@@ -1373,3 +1374,4 @@ void IRAM_ATTR PS2Controller::ULPWakeISR(void * arg)
 } // end of namespace
 
 
+#endif
