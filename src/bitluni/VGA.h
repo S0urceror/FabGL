@@ -8,6 +8,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+namespace bitluni {
 class VGA
 {
 	public:
@@ -49,5 +50,7 @@ class VGA
 		
 		void attachPinToSignal(int pin, int signal);
 };
+
+} // namespace bitluni
 
 #endif //VGA_h

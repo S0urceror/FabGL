@@ -7,6 +7,8 @@
 
 extern int Cache_WriteBack_Addr(uint32_t addr, uint32_t size);
 
+namespace bitluni {
+
 class DMAVideoBuffer
 {
 	protected:
@@ -43,3 +45,5 @@ class DMAVideoBuffer
 		int getBufferCount() const;
 		bool isValid() const;
 };
+
+} // namespace bitluni

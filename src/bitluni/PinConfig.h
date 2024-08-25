@@ -1,6 +1,9 @@
 
 #ifndef PINCONFIG_H
 #define PINCONFIG_H
+
+namespace bitluni {
+
 class PinConfig;
 class PinConfig
 {
@@ -27,4 +30,7 @@ class PinConfig
 			this->vSync = vSync;
 		}
 };
+
+} // namespace bitluni
+
 #endif //PINCONFIG_H

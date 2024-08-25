@@ -2,6 +2,8 @@
 #define MODE_H
 #include <stdint.h>
 
+namespace bitluni {
+
 class Mode;
 class Mode
 {
@@ -82,4 +84,7 @@ class Mode
 	}
 };
 
+} // namespace bitluni
+
 #endif //MODE_h
+

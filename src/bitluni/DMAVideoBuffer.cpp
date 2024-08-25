@@ -1,5 +1,7 @@
 #include "DMAVideoBuffer.h"
 
+namespace bitluni {
+
 DMAVideoBuffer::DMAVideoBuffer(int lines, int lineSize, int clones, bool ring, bool psram, int bufferCount)
 {
 	this->lineSize = lineSize;
@@ -130,3 +132,5 @@ bool DMAVideoBuffer::isValid() const
 {
 	return valid;
 }
+
+} // namespace bitluni

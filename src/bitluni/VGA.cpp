@@ -14,6 +14,7 @@
 #include <string.h>
 #include "../dispdrivers/vgacontrollers3.h"
 
+namespace bitluni {
 #ifndef min
 #define min(a,b)((a)<(b)?(a):(b))
 #endif
@@ -439,3 +440,5 @@ int VGA::getBufferCount ()
 {
 	return bufferCount;
 };
+
+} // namespace bitluni

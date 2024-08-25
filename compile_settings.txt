@@ -1,0 +1,10 @@
+Bitluni:
+================================================================================================
+Standard version of arduino and esppressif supported by platformio
+Uses internal header
+
+PLATFORM: Espressif 32 (6.7.0+sha.64608ba) > Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)
+framework-arduinoespressif32 @ 3.20017.0 (2.0.17) 
+
+Compile with -DBITLUNI
+
