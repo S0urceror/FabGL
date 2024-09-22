@@ -1,5 +1,8 @@
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
 #include "vgacontrollers3.h"
 #include "fabutils.h"
+#include "esp32s3/rom/ets_sys.h"
 
 namespace fabgl
 {
@@ -11,15 +14,16 @@ VGAControllerS3::VGAControllerS3 ()
     m_viewPortWidth=640;
     m_viewPortHeight=480;
     m_colorCount=64;
+    redraw_task_handle = NULL;
 }
 
 #ifdef BITLUNI
-void VGAControllerS3::setResolution(bitluni::Mode new_mode) 
+void VGAControllerS3::setResolution(Mode new_mode,bool double_buffer) 
 {
     mode = new_mode;
-    log_d ("frequency:%d",mode.frequency);
-    log_d ("hRes:%d",mode.hRes);
-    log_d ("vRes:%d",mode.vRes);
+    ets_printf ("frequency:%d\r\n",mode.frequency);
+    ets_printf ("hRes:%d\r\n",mode.hRes);
+    ets_printf ("vRes:%d\r\n",mode.vRes);
 
     // just in case setResolution() was called before
     end();
@@ -43,68 +47,182 @@ void VGAControllerS3::setResolution(bitluni::Mode new_mode)
     // inform base class about screen size
     setScreenSize(m_timings.HVisibleArea, m_timings.VVisibleArea);
     // create primitive queues
-    setDoubleBuffered(false);
+    setDoubleBuffered(double_buffer);
     // set default paint state (brushes, cliprects, origin)
     resetPaintState();
 
     // number of microseconds usable in VSynch ISR
     m_maxVSyncISRTime = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * linesize * (m_timings.VSyncPulse + m_timings.VBackPorch + m_timings.VFrontPorch + viewportrow));
-    // log_i("max vsync ISR time: %d",m_maxVSyncISRTime);
+    // ets_printf("max vsync ISR time: %d\r\n",m_maxVSyncISRTime);
 
-    if(vga.init(pins, mode, 8)) 
+    if(vga.init(_pins, mode, 8,double_buffer)) 
 	{
         vga.show();
 	    vga.start();
     }
     else
     {
-		log_e ("VGA resolution change not successful\r\n");
+		ets_printf ("VGA resolution change not successful\r\n");
 		end();
 	}
 }
 #else
-void VGAControllerS3::setResolution(int width,int height,int color_depth) 
+//void VGAControllerS3::setResolution(int width,int height,int color_depth,bool double_buffer) 
+void VGAControllerS3::setResolution(VGATimings const& timings, int color_depth, bool doubleBuffered)
 {
     // just in case setResolution() was called before
-    end();
+    // end();
+    m_timings = timings;
+    m_screenWidth = m_viewPortWidth = timings.HVisibleArea;
+    m_screenHeight = m_viewPortHeight = timings.VVisibleArea;
 
-    m_screenWidth = width;
-    m_screenHeight = height;
+    int linesize = timings.HFrontPorch + timings.HSyncPulse + timings.HBackPorch + timings.HVisibleArea;
+    int viewportrow = 0;
     
     // inform base class about screen size
-    setScreenSize(width, height);
+    setScreenSize(m_screenWidth, m_screenHeight);
     // create primitive queues
-    setDoubleBuffered(true);
+    setDoubleBuffered(doubleBuffered);
+    // setDoubleBuffered(false);
     // set default paint state (brushes, cliprects, origin)
     resetPaintState();
 
-    // number of microseconds usable in VSynch ISR
-    // m_maxVSyncISRTime = ceil(1000000.0 / m_timings.frequency * m_timings.scanCount * linesize * (m_timings.VSyncPulse + m_timings.VBackPorch + m_timings.VFrontPorch + viewportrow));
-    // log_i("max vsync ISR time: %d",m_maxVSyncISRTime);
+    // if (doubleBuffered)
+    //   enableBackgroundPrimitiveTimeout(false);
 
-    if (!vga.init(width, height, 1, 0, 0, color_depth, pins, true))
+    // number of microseconds usable in VSynch ISR
+    m_maxVSyncISRTime = ceil(1000000.0 / timings.frequency * timings.scanCount * linesize * (timings.VSyncPulse + timings.VBackPorch + timings.VFrontPorch + viewportrow));
+    //ets_printf("max vsync ISR time: %d\r\n",m_maxVSyncISRTime);
+
+    if (!vga.init(timings, color_depth, _pins, true, doubleBuffered, true))
     {
-		log_e ("VGA resolution change not successful\r\n");
-		end();
-	}
+      ets_printf ("VGA resolution change not successful\r\n");
+      end();
+    }
 }
 #endif
+
+// modeline syntax:
+//   "label" clock_mhz hdisp hsyncstart hsyncend htotal vdisp vsyncstart vsyncend vtotal [(+HSync | -HSync) (+VSync | -VSync)] [DoubleScan | QuadScan] [FrontPorchBegins | SyncBegins | BackPorchBegins | VisibleBegins] [MultiScanBlank]
+bool VGAControllerS3::convertModelineToTimings(char const * modeline, VGATimings * timings)
+{
+  float freq;
+  int hdisp, hsyncstart, hsyncend, htotal, vdisp, vsyncstart, vsyncend, vtotal;
+  char HSyncPol = 0, VSyncPol = 0;
+  int pos = 0;
+
+  int count = sscanf(modeline, "\"%[^\"]\" %g %d %d %d %d %d %d %d %d %n", timings->label, &freq, &hdisp, &hsyncstart, &hsyncend, &htotal, &vdisp, &vsyncstart, &vsyncend, &vtotal, &pos);
+
+  if (count == 10 && pos > 0) {
+
+    timings->frequency      = freq * 1000000;
+    timings->HVisibleArea   = hdisp;
+    timings->HFrontPorch    = hsyncstart - hdisp;
+    timings->HSyncPulse     = hsyncend - hsyncstart;
+    timings->HBackPorch     = htotal - hsyncend;
+    timings->VVisibleArea   = vdisp;
+    timings->VFrontPorch    = vsyncstart - vdisp;
+    timings->VSyncPulse     = vsyncend - vsyncstart;
+    timings->VBackPorch     = vtotal - vsyncend;
+    timings->HSyncLogic     = '-';
+    timings->VSyncLogic     = '-';
+    timings->scanCount      = 1;
+    timings->multiScanBlack = 0;
+    timings->HStartingBlock = VGAScanStart::VisibleArea;
+
+    // actually this checks just the first character
+    auto pc  = modeline + pos;
+    auto end = pc + strlen(modeline);
+    while (*pc && pc < end) {
+      switch (*pc) {
+        // parse [(+HSync | -HSync) (+VSync | -VSync)]
+        case '+':
+        case '-':
+          if (!HSyncPol)
+            timings->HSyncLogic = HSyncPol = *pc;
+          else if (!VSyncPol)
+            timings->VSyncLogic = VSyncPol = *pc;
+          pc += 6;
+          break;
+        // parse [DoubleScan | QuadScan]
+        // DoubleScan
+        case 'D':
+        case 'd':
+          timings->scanCount = 2;
+          pc += 10;
+          break;
+        // QuadScan
+        case 'Q':
+        case 'q':
+          timings->scanCount = 4;
+          pc += 8;
+          break;
+        // parse [FrontPorchBegins | SyncBegins | BackPorchBegins | VisibleBegins] [MultiScanBlank]
+        // FrontPorchBegins
+        case 'F':
+        case 'f':
+          timings->HStartingBlock = VGAScanStart::FrontPorch;
+          pc += 16;
+          break;
+        // SyncBegins
+        case 'S':
+        case 's':
+          timings->HStartingBlock = VGAScanStart::Sync;
+          pc += 10;
+          break;
+        // BackPorchBegins
+        case 'B':
+        case 'b':
+          timings->HStartingBlock = VGAScanStart::BackPorch;
+          pc += 15;
+          break;
+        // VisibleBegins
+        case 'V':
+        case 'v':
+          timings->HStartingBlock = VGAScanStart::VisibleArea;
+          pc += 13;
+          break;
+        // MultiScanBlank
+        case 'M':
+        case 'm':
+          timings->multiScanBlack = 1;
+          pc += 14;
+          break;
+        case ' ':
+          ++pc;
+          break;
+        default:
+          return false;
+      }
+    }
+
+    return true;
+
+  }
+  return false;
+}
 void VGAControllerS3::setResolution(char const * modeline, int viewPortWidth, int viewPortHeight, bool doubleBuffered)
 {
-    log_e ("FabGL modeline not yet supported");
-}
-#ifdef BITLUNI
-void VGAControllerS3::begin()
-{
-    log_d ("VGAControllerS3::begin()");
-    begin (fabgl::VGAControllerS3_PIN_AGON_LIGHT);
+  #ifndef BITLUNI
+    VGATimings timings;
+    if (convertModelineToTimings(modeline, &timings))
+        setResolution(timings, 8, doubleBuffered);
+  #else
+    ets_printf ("modeline not yet implemented");
+  #endif
 }
 
-void VGAControllerS3::begin(bitluni::PinConfig set_pins) 
+void VGAControllerS3::begin()
 {
-    log_d ("VGAControllerS3::begin(PinConfig set_pins)");
+    //ets_printf ("VGAControllerS3::begin()\r\n");
+    begin (PIN_AGON_LIGHT);
+}
+
+void VGAControllerS3::begin(PinConfig set_pins) 
+{
+    //ets_printf ("VGAControllerS3::begin(PinConfig set_pins)\r\n");
     m_primitiveProcessingSuspended=0;
-    pins = set_pins;
+    _pins = set_pins;
 
     //Create redraw task on 2nd core
     xTaskCreatePinnedToCore(redraw_task,
@@ -114,39 +232,34 @@ void VGAControllerS3::begin(bitluni::PinConfig set_pins)
                             REDRAW_TASK_PRIORITY,
                             &redraw_task_handle,
                             1);
-	//Give task handle to VGA controller
-	//this will notify
-	vga.setRedrawTask (redraw_task_handle);
+    //Give task handle to VGA controller
+    //this will notify
+    vga.setRedrawTask (redraw_task_handle);
 };
+#ifdef BITLUNI
 void VGAControllerS3::end()
 {
-    log_d ("VGAControllerS3::end()");
-    m_primitiveProcessingSuspended=0;
+    ets_printf ("VGAControllerS3::end()\r\n");
+    m_primitiveProcessingSuspended=1;
     vga.stopVSyncInterupt();
 }
 #else
-void VGAControllerS3::begin()
-{
-    log_d ("VGAControllerS3::begin()");
-    begin (fabgl::VGAControllerS3_PIN_AGON_LIGHT);
-}
-
-void VGAControllerS3::begin(int* set_pins) 
-{
-    log_d ("VGAControllerS3::begin(PinConfig set_pins)");
-    m_primitiveProcessingSuspended=0;
-    pins = set_pins;
-};
 void VGAControllerS3::end()
 {
-    log_d ("VGAControllerS3::end()");
-    m_primitiveProcessingSuspended=0;
+    //ets_printf ("VGAControllerS3::end()\r\n");
+    if (redraw_task_handle)
+    {
+        vga.setRedrawTask (NULL);
+        vTaskDelete (redraw_task_handle);
+    }
+
+    m_primitiveProcessingSuspended=1;
     vga.deinit();
 }
 #endif
 NativePixelFormat VGAControllerS3::nativePixelFormat()
 {
-    log_d ("returning nativePixelFormat()");
+    //ets_printf ("returning nativePixelFormat()\r\n");
     return NativePixelFormat::SBGR2222;
 }
 #ifdef BITLUNI
@@ -171,21 +284,23 @@ void VGAControllerS3::resumeBackgroundPrimitiveExecution()
 #else
 void VGAControllerS3::suspendBackgroundPrimitiveExecution()
 {
-    ets_printf ("suspendBackgroundPrimitiveExecution %d\r\n",m_primitiveProcessingSuspended);
+    //ets_printf ("suspendBackgroundPrimitiveExecution %d\r\n",m_primitiveProcessingSuspended);
     m_primitiveProcessingSuspended++;
 }
 void VGAControllerS3::resumeBackgroundPrimitiveExecution()
 {
-    ets_printf ("resumeBackgroundPrimitiveExecution %d\r\n",m_primitiveProcessingSuspended);
+    //ets_printf ("resumeBackgroundPrimitiveExecution %d\r\n",m_primitiveProcessingSuspended);
+    m_primitiveProcessingSuspended = tmax(0, m_primitiveProcessingSuspended - 1);
 }
 #endif
 void VGAControllerS3::readScreen(Rect const & rect, RGB888 * destBuf)
 {
-    log_d ("readScreen");
+    ets_printf ("readScreen\r\n");
 }
 void IRAM_ATTR VGAControllerS3::setPixelAt(PixelDesc const & pixelDesc, Rect & updateRect)
 {
-    ets_printf ("setPixelAt\r\n");
+    //ets_printf ("setPixelAt\r\n");
+    vga.set_pixel (pixelDesc.pos.X,pixelDesc.pos.Y,pixelDesc.color.R,pixelDesc.color.G,pixelDesc.color.B);
 }
 void IRAM_ATTR VGAControllerS3::absDrawLine(int X1, int Y1, int X2, int Y2, RGB888 color)
 {
@@ -193,13 +308,15 @@ void IRAM_ATTR VGAControllerS3::absDrawLine(int X1, int Y1, int X2, int Y2, RGB8
 }
 void IRAM_ATTR VGAControllerS3::rawCopyRow(int x1, int x2, int srcY, int dstY)
 {
+    #ifndef BITLUNI
     ets_printf ("rawCopyRow from: %d,%d-%d,%d - to: %d,%d-%d,%d\r\n",x1,srcY,x2,srcY,x1,dstY,x2,dstY);
+    #endif
     // from x1,srcY to x1,dstY, width of x2-x1, height of 1
     vga.move_rect (x1,srcY,x1,dstY,x2-x1,1);
 }
 void IRAM_ATTR VGAControllerS3::rawFillRow(int y, int x1, int x2, RGB888 color)
 {
-    // ets_printf ("rawFillRow %d,%d,%d - %d,%d,%d\r\n",y,x1,x2,color.R,color.G,color.B);
+    //ets_printf ("rawFillRow %d,%d,%d - %d,%d,%d\r\n",y,x1,x2,color.R,color.G,color.B);
     vga.fill_rect (vga.rgb_to_bits(color.R,color.G,color.B),x1,y,x2,y);
 }
 void IRAM_ATTR VGAControllerS3::drawEllipse(Size const & size, Rect & updateRect)
@@ -208,21 +325,15 @@ void IRAM_ATTR VGAControllerS3::drawEllipse(Size const & size, Rect & updateRect
 }
 void IRAM_ATTR VGAControllerS3::clear(Rect & updateRect)
 {
-    if (updateRect.width()==m_screenWidth && 
-        updateRect.height()==m_screenHeight)
-    {
-        ets_printf ("clear ()\r\n");
-        vga.clear (0);
-    }
-    else
-    {
-        ets_printf ("fill_rect (%d,%d,%d,%d)\r\n",updateRect.X1,updateRect.Y1,updateRect.X2,updateRect.Y2);
-        vga.fill_rect (vga.rgb_to_bits(0,0,0),updateRect.X1,updateRect.Y1,updateRect.X2,updateRect.Y2);
-    }
+    RGB888 rgb = getActualBrushColor();
+    vga.clear (vga.rgb_to_bits (rgb.R,rgb.G,rgb.B));
+    updateRect = updateRect.merge (Rect (0,0,m_screenWidth-1,m_screenHeight-1));
 }
 void IRAM_ATTR VGAControllerS3::VScroll(int scroll, Rect & updateRect)
 {
+    #ifndef BITLUNI
     ets_printf ("VScroll\r\n");
+    #endif
     hideSprites(updateRect);
     RGB888 color = getActualBrushColor();
     int Y1 = paintState().scrollingRegion.Y1;
@@ -263,7 +374,7 @@ void IRAM_ATTR VGAControllerS3::HScroll(int scroll, Rect & updateRect)
 }
 void IRAM_ATTR VGAControllerS3::drawGlyph(Glyph const & glyph, GlyphOptions glyphOptions, RGB888 penColor, RGB888 brushColor, Rect & updateRect)
 {
-    // ets_printf ("drawGlyph ");
+    // ets_printf ("drawGlyph \r\n");
     // ets_printf ("penColor=%d,%d,%d\r\n",penColor.R,penColor.G,penColor.B);
     // ets_printf ("brushColor=%d,%d,%d\r\n",brushColor.R,brushColor.G,brushColor.B);
 
@@ -358,7 +469,12 @@ void IRAM_ATTR VGAControllerS3::drawGlyph(Glyph const & glyph, GlyphOptions glyp
     }
 }
 
-inline void VGAControllerS3::rawSetPixelInRow (int y,int x,int color)
+uint8_t VGAControllerS3::rawGetPixelInRow (int y,int x)
+{
+  return vga.get_pixel (x,y);
+}
+
+void VGAControllerS3::rawSetPixelInRow (int y,int x,int color)
 {
     vga.set_pixel (x,y,color);
 }
@@ -369,7 +485,7 @@ void IRAM_ATTR VGAControllerS3::invertRect(Rect const & rect, Rect & updateRect)
 }
 void IRAM_ATTR VGAControllerS3::swapFGBG(Rect const & rect, Rect & updateRect)
 {
-    // ets_printf ("swapFGBG (%d,%d,%d,%d)\r\n",rect.X1,rect.Y1,rect.X2,rect.Y2);
+    //ets_printf ("swapFGBG (%d,%d,%d,%d)\r\n",rect.X1,rect.Y1,rect.X2,rect.Y2);
     auto pen = paintState().penColor;
     auto brush = paintState().brushColor;
     auto penPattern   = preparePixel(pen);
@@ -409,24 +525,21 @@ void IRAM_ATTR VGAControllerS3::swapFGBG(Rect const & rect, Rect & updateRect)
 }
 void IRAM_ATTR VGAControllerS3::copyRect(Rect const & source, Rect & updateRect)
 {
-    ets_printf ("copyRect()\r\n");
+    Rect rct (paintState().position.X,paintState().position.Y,paintState().position.X+source.width(),paintState().position.Y+source.height());
+    updateRect = updateRect.merge(rct);
+    vga.move_rect (source.X1,source.Y1,paintState().position.X,paintState().position.Y,source.width(),source.height());
+    //ets_printf ("copyRect()\r\n");
 }
-#ifdef BITLUNI
 void VGAControllerS3::swapBuffers()
 {
-    log_d ("swapBuffers()");
-    vga.show ();
+    //ets_printf ("swapBuffers()\r\n");
+    #ifndef BITLUNI
+    vga.swapBuffers ();
+    #endif
 }
-#else
-void VGAControllerS3::swapBuffers()
-{
-    log_d ("swapBuffers()");
-    vga.vsyncWait();
-}
-#endif
 int VGAControllerS3::getBitmapSavePixelSize()
 {
-    log_d ("getBitmapSavePixelSize()");
+    //ets_printf ("getBitmapSavePixelSize()\r\n");
     return 1;
 }
 void IRAM_ATTR VGAControllerS3::rawDrawBitmap_Native(int destX, int destY, Bitmap const * bitmap, int X1, int Y1, int XCount, int YCount)
@@ -439,7 +552,38 @@ void IRAM_ATTR VGAControllerS3::rawDrawBitmap_Mask(int destX, int destY, Bitmap 
 }
 void IRAM_ATTR VGAControllerS3::rawDrawBitmap_RGBA2222(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
 {
-    ets_printf ("rawDrawBitmap_RGBA2222()\r\n");
+    const int width  = bitmap->width;
+    const int yEnd   = Y1 + YCount;
+    const int xEnd   = X1 + XCount;
+    auto data = bitmap->data;
+
+    if (saveBackground) {
+
+      // save background and draw the bitmap
+      for (int y = Y1; y < yEnd; ++y, ++destY) {
+        //auto dstrow = rawGetRow(destY);
+        uint8_t* savePx = ((uint8_t*) saveBackground) + y * width + X1;
+        auto src = data + y * width + X1;
+        for (int x = X1, adestX = destX; x < xEnd; ++x, ++adestX, ++savePx, ++src) {
+          *savePx = rawGetPixelInRow(destY, adestX);
+          if (*src & 0xc0)  // alpha > 0 ?
+            rawSetPixelInRow(destY, adestX, *src);
+        }
+      }
+
+    } else {
+
+      // just draw the bitmap
+      for (int y = Y1; y < yEnd; ++y, ++destY) {
+        //auto dstrow = rawGetRow(destY);
+        auto src = data + y * width + X1;
+        for (int x = X1, adestX = destX; x < xEnd; ++x, ++adestX, ++src) {
+          if (*src & 0xc0)  // alpha > 0 ?
+            rawSetPixelInRow(destY, adestX, *src);
+        }
+      }
+
+    }
 }
 void IRAM_ATTR VGAControllerS3::rawDrawBitmap_RGBA8888(int destX, int destY, Bitmap const * bitmap, void * saveBackground, int X1, int Y1, int XCount, int YCount)
 {
@@ -448,94 +592,55 @@ void IRAM_ATTR VGAControllerS3::rawDrawBitmap_RGBA8888(int destX, int destY, Bit
 
 uint8_t VGAControllerS3::preparePixel(RGB222 rgb) 
 { 
-	uint8_t pixel = vga.rgb_to_bits (rgb.R<<6,rgb.G<<6,rgb.R<<6);
+	  uint8_t pixel = vga.rgb_to_bits (rgb.R<<6,rgb.G<<6,rgb.R<<6);
     return pixel; //m_HVSync | (rgb.B << VGA_BLUE_BIT) | (rgb.G << VGA_GREEN_BIT) | (rgb.R << VGA_RED_BIT); 
 }
 
-#ifdef BITLUNI
 void VGAControllerS3::redraw_task(void *pArg)
 {
-	int x=0,y=0;
-	int px=0,py=0;
-	int xd=1;
-	int yd=1;
-	const int dx=50;
-	const int dy=50;
-	uint32_t ulNotificationValue;
-	int color=0,backcolor;
-	float framerate=0.0;
-	const TickType_t xMaxBlockTime = pdMS_TO_TICKS( 20 );
+    uint32_t ulNotificationValue;
+    int color=0,backcolor;
+    const TickType_t xMaxBlockTime = pdMS_TO_TICKS( 20 );
 
-    #ifdef LOG_FRAMERATE_S3
-	unsigned long timePreviousFrame = millis ();
-	unsigned long timeCurrentFrame;
-	int framerate_counter = 0;
-    #endif
-
-	log_i ("+Redraw task started\r\n");
+    ets_printf ("+Redraw task started\r\n");
 
     VGAControllerS3* controller = (VGAControllerS3*)pArg;
-	bitluni::VGA& vga = controller->vga;
-	// wait till next vsync
-	while (true)
-	{
-		ulNotificationValue = ulTaskNotifyTake( pdTRUE,
-												xMaxBlockTime );
-		if (ulNotificationValue>1)
-				log_e ("-%d frames skipped\r\n",ulNotificationValue-1);
-		if( ulNotificationValue == 1 )
-		{
-            #ifdef LOG_FRAMERATE_S3
-            timeCurrentFrame = millis();
-			framerate += 1.0/((timeCurrentFrame-timePreviousFrame)*0.001);
-			timePreviousFrame = timeCurrentFrame;
-			if (framerate_counter==0)
-			{
-				framerate_counter = 60; // every second update
-				log_i ("+Framerate: %f\r\n",framerate/framerate_counter);
-                framerate = 0;
-			}
-            else 
-			    framerate_counter--;
-            #endif
+    VGA& vga = controller->vga;
+    // wait till next vsync   
+    while (true)
+    {
+          ulNotificationValue = ulTaskNotifyTake( pdTRUE,
+                              xMaxBlockTime );
 
-            // clear old rectangle
-			if (vga.getBufferCount()==1)
-			{
-				// single buffer
-                // do the painting
-                int64_t startTime = controller->backgroundPrimitiveTimeoutEnabled() ? esp_timer_get_time() : 0;
-                Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
-                do 
-                {
-                    Primitive prim;
-                    if (controller->getPrimitiveISR(&prim) == false)
-                        break;
+          if( ulNotificationValue == 1 )
+          {
+              // do the painting
+              int64_t startTime = controller->backgroundPrimitiveTimeoutEnabled() ? esp_timer_get_time() : 0;
+              Rect updateRect = Rect(SHRT_MAX, SHRT_MAX, SHRT_MIN, SHRT_MIN);
+              do 
+              {
+                  Primitive prim;
+                  if (controller->getPrimitiveISR(&prim) == false)
+                      break;
 
-                    controller->execPrimitive(prim, updateRect, true);
+                  controller->execPrimitive(prim, updateRect, true);
 
-                    if (controller->m_primitiveProcessingSuspended)
-                        break;
+                  if (controller->m_primitiveProcessingSuspended)
+                      break;
 
-                } while (!controller->backgroundPrimitiveTimeoutEnabled() || (startTime + controller->m_maxVSyncISRTime > esp_timer_get_time()));
-                // show the result
-                vga.show();
-            }
-			else
-			{
-                // double buffering
-                //
-                // show contents of previous frame written
-				vga.show();
-			}
-		}
-		// else
-		// {
-		// 	/* The call to ulTaskNotifyTake() timed out. */
-		// 	log_e ("-Error, waited too long for VSync\r\n");
-		// }
-	}
+              } while (!controller->backgroundPrimitiveTimeoutEnabled() || (startTime + controller->m_maxVSyncISRTime > esp_timer_get_time()));
+              // show the result
+              vga.show(updateRect);
+          }
+          else
+          {
+              /* The call to ulTaskNotifyTake() timed out. */
+              ets_printf ("-Error, waited too long for VSync\r\n");
+              ets_printf ("-%d frames skipped\r\n",ulNotificationValue-1);
+          }
+    }
 }
-#endif
 
 } // namespace FabGL
+
+#endif //CONFIG_IDF_TARGET_ESP32S3

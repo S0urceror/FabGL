@@ -1,18 +1,17 @@
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
 #pragma once
 
 #include "displaycontroller.h"
 #include "dispdrivers/vgabasecontroller.h"
 #ifdef BITLUNI
 #include "bitluni/VGA.h"
+using namespace bitluni;
 #else
 #include "devdrivers/VGA.h"
 #endif
 namespace fabgl 
 {
-    // 6 bit version, agon compatible
-    #ifdef BITLUNI
-    static const bitluni::PinConfig VGAControllerS3_PIN_AGON_LIGHT(-1,-1,-1,16,15,  -1,-1,-1,-1,7,6,  -1,-1,-1,5,4,  17,18);
-    #endif
     class VGAControllerS3  : public BitmappedDisplayController
     {
         public:
@@ -53,34 +52,42 @@ namespace fabgl
 
             // own specialised methods
             #ifdef BITLUNI
-            virtual void setResolution(bitluni::Mode mode);
-            void begin(bitluni::PinConfig set_pins);
+            virtual void setResolution(Mode mode,bool double_buffer);
             #else
-            virtual void setResolution(int width,int height,int color_depth);
-            void begin(int* set_pins);
+            //virtual void setResolution(int width,int height,int color_depth,bool double_buffer);
+            void setResolution(VGATimings const& timings, int color_depth, bool doubleBuffered);
             #endif
-            inline void rawSetPixelInRow (int y,int x,int color);
-            uint8_t IRAM_ATTR preparePixel(RGB222 rgb);
+            void begin(PinConfig set_pins);
             void end ();
+
+            uint8_t IRAM_ATTR preparePixel(RGB222 rgb);
             
             void rawCopyRow(int x1, int x2, int srcY, int dstY);
+            inline uint8_t rawGetPixelInRow (int y,int x);
+            inline void rawSetPixelInRow (int y,int x,int color);
+            bool convertModelineToTimings(char const * modeline, VGATimings * timings);
             
         private:
             int m_colorCount;
             volatile int m_primitiveProcessingSuspended;
-            #ifdef BITLUNI
-            bitluni::VGA vga;
-            VGATimings m_timings;
-            bitluni::Mode mode;
-            bitluni::PinConfig pins;
+            PinConfig _pins;
+            static void redraw_task(void *pArg);
             volatile int16_t m_maxVSyncISRTime; // Maximum us VSync interrupt routine can run
             TaskHandle_t redraw_task_handle;
             const UBaseType_t REDRAW_TASK_PRIORITY=2;
-		    static void redraw_task(void *pArg);
+            VGATimings m_timings;
+            
+            #ifdef BITLUNI
+            VGA vga;
+            Mode mode;
             #else
             VGA vga;
-            int* pins;
             #endif
             
     };
+
+    // 6 bit version, agon compatible
+    static const PinConfig PIN_AGON_LIGHT(-1,-1,-1,15,16,  -1,-1,-1,-1,6,7,  -1,-1,-1,4,5,  17,18);
 }
+
+#endif //CONFIG_IDF_TARGET_ESP32S3

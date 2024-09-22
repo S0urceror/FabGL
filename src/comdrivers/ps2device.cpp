@@ -22,7 +22,6 @@
   You should have received a copy of the GNU General Public License
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 #include "freertos/FreeRTOS.h"
 
@@ -173,12 +172,18 @@ bool PS2Device::sendCommand(uint8_t cmd, uint8_t expectedReply)
   // temporary disable RX for the other port
   PS2PortAutoDisableRX autoDisableRX(!m_PS2Port);
 
+  ESP_LOGI ("FABGL","PS2Controller:sendData(0x%x)",cmd);
   PS2Controller::sendData(cmd, m_PS2Port);
   TimeOut timeout;
+  uint8_t reply;
   do {
-    if (PS2Controller::getData(m_PS2Port, INTER_WAITREPLY_TIMEOUT_MS) == expectedReply)
+    reply = PS2Controller::getData(m_PS2Port, INTER_WAITREPLY_TIMEOUT_MS);
+    if (reply == expectedReply) {
+      ESP_LOGI ("FABGL","PS2Controller:getData() got expected reply 0x%x",expectedReply);
       return true;
+    }
   } while (!timeout.expired(m_cmdTimeOut));
+  ESP_LOGE ("FABGL","PS2Controller:getData() got wrong reply 0x%x",reply);
   return false;
 }
 
@@ -344,4 +349,3 @@ bool PS2Device::send_cmdReset()
 
 
 } // end of namespace
-#endif

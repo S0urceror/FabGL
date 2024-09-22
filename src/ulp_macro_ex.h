@@ -1,12 +1,14 @@
 #pragma once
 
-
-
 #include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#if CONFIG_IDF_TARGET_ESP32
 #include "esp32/ulp.h"
-
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "soc/rtc_cntl_reg.h"
+#include "esp32s3/ulp.h"
+#endif
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/sens_reg.h"
@@ -15,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////
 // Support for missing macros for operations on STAGE register
 // fabgl changes:
-
+#if CONFIG_IDF_TARGET_ESP32
 #define ALU_SEL_STAGE_INC 0
 #define ALU_SEL_STAGE_DEC 1
 #define ALU_SEL_STAGE_RST 2
@@ -52,6 +54,7 @@
     .sub_opcode = SUB_OPCODE_ALU_CNT, \
     .opcode = OPCODE_ALU } }
 
+
 // Branch relative if STAGE less than immediate value (8 bit)
 #define I_STAGEBL(pc_offset, imm_value) { .b = { \
     .imm = imm_value, \
@@ -62,6 +65,7 @@
     .opcode = OPCODE_BRANCH } }
 
 // Branch relative if STAGE less or equal than immediate value (8 bit)
+// ERROR, .cmp should be 2, luckily nowhere used
 #define I_STAGEBLE(pc_offset, imm_value) { .b = { \
     .imm = imm_value, \
     .cmp = 1, \
@@ -71,6 +75,7 @@
     .opcode = OPCODE_BRANCH } }
 
 // Branch relative if STAGE greater or equal than immediate value (8 bit)
+// ERROR, .cmp should be 1, luckily nowhere used
 #define I_STAGEBGE(pc_offset, imm_value) { .b = { \
     .imm = 0x8000 | imm_value, \
     .cmp = 0, \
@@ -78,6 +83,7 @@
     .sign = (pc_offset >= 0) ? 0 : 1, \
     .sub_opcode = SUB_OPCODE_STAGEB, \
     .opcode = OPCODE_BRANCH } }
+
 
 // STAGE register branches to labels.
 
@@ -98,3 +104,23 @@
 
 
 esp_err_t ulp_process_macros_and_load_ex(uint32_t load_addr, const ulp_insn_t* program, size_t* psize);
+#else
+#define M_STAGEBL(label_num, imm_value) \
+    M_BRANCH(label_num), \
+    I_BSL(0, imm_value | 0x8000)
+
+#define M_STAGEBGE(label_num, imm_value) \
+    M_BRANCH(label_num), \
+    I_BSGE(0, imm_value | 0x8000)
+
+#define M_STAGEBLE(label_num, imm_value) \
+    M_BRANCH(label_num), \
+    I_BSLE(0, imm_value | 0x8000)
+
+#define I_STAGERSTI() \
+    I_STAGE_RST (0,0,0) 
+
+#define I_STAGEINCI(imm_value) \
+    I_STAGE_INC(0,0,imm_value)
+
+#endif

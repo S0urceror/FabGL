@@ -37,6 +37,7 @@
 #include "fabutils.h"
 #include "cvbs16controller.h"
 
+bool spi_flash_cache_enabled(void);
 
 
 #pragma GCC optimize ("O2")

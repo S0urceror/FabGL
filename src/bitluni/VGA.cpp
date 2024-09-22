@@ -1,3 +1,5 @@
+#ifdef BITLUNI
+
 #include "VGA.h"
 #include <esp_rom_gpio.h>
 #include <esp_rom_sys.h>
@@ -9,7 +11,7 @@
 #include <soc/lcd_cam_struct.h>
 #include <math.h>
 #include <esp_private/gdma.h>
-#include <FreeRTOS.h>
+//#include <FreeRTOS.h>
 #include <soc/lcd_periph.h>
 #include <string.h>
 #include "../dispdrivers/vgacontrollers3.h"
@@ -107,11 +109,13 @@ static void IRAM_ATTR lcd_default_isr_handler(void *args)
     }
 }
 
-bool VGA::init(const PinConfig pins, const Mode mode, int bits)
+bool VGA::init(const PinConfig pins, const Mode mode, int bits,bool double_buffer)
 {
 	this->pins = pins;
 	this->mode = mode;
 	this->bits = bits;
+	if (double_buffer)
+		this->bufferCount = 2;
 	backBuffer = 0;
 
 	//TODO check start
@@ -442,3 +446,5 @@ int VGA::getBufferCount ()
 };
 
 } // namespace bitluni
+
+#endif

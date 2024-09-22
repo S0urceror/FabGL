@@ -2,13 +2,9 @@
 #ifndef PINCONFIG_H
 #define PINCONFIG_H
 
-namespace bitluni {
-
 class PinConfig;
 class PinConfig
 {
-	public:
-		static const PinConfig VGAPurple;
 	public:
 		int r[5];
 		int g[6];
@@ -30,7 +26,5 @@ class PinConfig
 			this->vSync = vSync;
 		}
 };
-
-} // namespace bitluni
 
 #endif //PINCONFIG_H

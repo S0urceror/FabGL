@@ -14,7 +14,7 @@
 
 // This file is identical to IDF ulp_macro.c, except for redefinition of CONFIG_ULP_COPROC_RESERVE_MEM to allow
 // larger ULP programs
-
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -22,8 +22,7 @@
 #include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "esp32/ulp.h"
-
+#include "ulp.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "soc/sens_reg.h"
@@ -275,3 +274,5 @@ esp_err_t ulp_process_macros_and_load_ex(uint32_t load_addr, const ulp_insn_t* p
     *psize = real_program_size;
     return ESP_OK;
 }
+
+#endif //CONFIG_IDF_TARGET_ESP32S3

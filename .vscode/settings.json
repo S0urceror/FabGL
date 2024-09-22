@@ -1,5 +1,12 @@
 {
     "files.associations": {
-        "initializer_list": "cpp"
+        "initializer_list": "cpp",
+        "__hash_table": "cpp",
+        "__split_buffer": "cpp",
+        "ios": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp"
     }
 }

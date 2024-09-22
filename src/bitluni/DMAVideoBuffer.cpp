@@ -1,3 +1,5 @@
+#ifdef BITLUNI
+
 #include "DMAVideoBuffer.h"
 
 namespace bitluni {
@@ -134,3 +136,5 @@ bool DMAVideoBuffer::isValid() const
 }
 
 } // namespace bitluni
+
+#endif

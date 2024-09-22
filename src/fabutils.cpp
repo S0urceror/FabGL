@@ -39,7 +39,11 @@ extern "C" {
 #include "esp_task_wdt.h"
 #include "driver/sdspi_host.h"
 #include "sdmmc_cmd.h"
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 #include "esp_spiffs.h"
+#else
+#include "soc/gpio_periph.h"
+#endif
 #include "soc/efuse_reg.h"
 #include "soc/rtc.h"
 #include "esp_ipc.h"
@@ -1146,7 +1150,7 @@ FILE * FileBrowser::openFile(char const * filename, char const * mode)
 
 DriveType FileBrowser::getCurrentDriveType()
 {
-  #ifdef FABGL_EMULATED
+  #if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
   return DriveType::SDCard;
   #else
   return getDriveType(m_dir);
@@ -1156,7 +1160,7 @@ DriveType FileBrowser::getCurrentDriveType()
 
 DriveType FileBrowser::getDriveType(char const * path)
 {
-  #ifdef FABGL_EMULATED
+  #if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
   return DriveType::SDCard;
   #else
   if (strncmp(path, "/spiffs", 7) == 0 || (s_SPIFFSMounted && strncmp(path, s_SPIFFSMountPath, strlen(s_SPIFFSMountPath)) == 0)) {
@@ -1170,7 +1174,7 @@ DriveType FileBrowser::getDriveType(char const * path)
 }
 
 
-#ifdef FABGL_EMULATED
+#if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
 bool FileBrowser::format(DriveType driveType, int drive)
 {
@@ -1228,7 +1232,7 @@ bool FileBrowser::format(DriveType driveType, int drive)
 #endif
 
 
-#ifdef FABGL_EMULATED
+#if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
 bool FileBrowser::mountSDCard(bool formatOnFail, char const * mountPath, size_t maxFiles, int allocationUnitSize, int MISO, int MOSI, int CLK, int CS)
 {
@@ -1315,7 +1319,7 @@ bool FileBrowser::mountSDCard(bool formatOnFail, char const * mountPath, size_t 
 #endif
 
 
-#ifdef FABGL_EMULATED
+#if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
 void FileBrowser::unmountSDCard()
 {
@@ -1345,7 +1349,7 @@ bool FileBrowser::remountSDCard()
 }
 
 
-#ifdef FABGL_EMULATED
+#if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
 bool FileBrowser::mountSPIFFS(bool formatOnFail, char const * mountPath, size_t maxFiles)
 {
@@ -1371,7 +1375,7 @@ bool FileBrowser::mountSPIFFS(bool formatOnFail, char const * mountPath, size_t 
 #endif
 
 
-#ifdef FABGL_EMULATED
+#if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
 void FileBrowser::unmountSPIFFS()
 {
@@ -1399,7 +1403,7 @@ bool FileBrowser::remountSPIFFS()
 
 bool FileBrowser::getFSInfo(DriveType driveType, int drive, int64_t * total, int64_t * used)
 {
-  #ifdef FABGL_EMULATED
+  #if defined(FABGL_EMULATED) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
   // just a placeholder
   *total = 2147483647;  // 2G

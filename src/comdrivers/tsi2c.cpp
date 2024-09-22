@@ -229,7 +229,7 @@ void I2C::commTaskFunc(void * pvParameters)
     if (bits & EVTGROUP_WRITE)
       job->lastError = i2cWrite(i2c, job->address, job->buffer, job->size, job->timeout);
     else if (bits & EVTGROUP_READ)
-      job->lastError = i2cRead(i2c, job->address, job->buffer, job->size, job->timeout, &job->readCount);
+      job->lastError = i2cRead(i2c, job->address, job->buffer, job->size, job->timeout, (size_t*) &job->readCount);
     #endif
 
   }

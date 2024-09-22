@@ -23,13 +23,17 @@
   along with FabGL.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef CONFIG_IDF_TARGET_ESP32S3
 
 #include <strings.h>
 
 #include "freertos/FreeRTOS.h"
-
+#if CONFIG_IDF_TARGET_ESP32
 #include "esp32/ulp.h"
+#elif CONFIG_IDF_TARGET_ESP32S3
+#include "soc/rtc_cntl_reg.h"
+#include "esp32s3/ulp.h"
+#include "ulp_debug.h"
+#endif
 #include "driver/rtc_io.h"
 #include "soc/sens_reg.h"
 #if __has_include("soc/rtc_io_periph.h")
@@ -42,7 +46,7 @@
 #include "ulp_macro_ex.h"
 #include "devdrivers/keyboard.h"
 #include "devdrivers/mouse.h"
-
+#include "esp32s3/rom/ets_sys.h"
 
 
 #pragma GCC optimize ("O2")
@@ -70,7 +74,6 @@ namespace fabgl {
 
 #define PS2_PORT0 0
 #define PS2_PORT1 1
-
 
 #define DAT_ENABLE_OUTPUT(ps2port, value) { .macro = { \
     .label      = value, \
@@ -148,6 +151,7 @@ namespace fabgl {
     CLK_ENABLE_OUTPUT(ps2port, 1), \
     CLK_ENABLE_INPUT(ps2port, 0)
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 // equivalent to rtc_gpio_set_level()
 // WRITE bit 0 of R0
 #define WRITE_DAT_R0(ps2port) \
@@ -156,6 +160,21 @@ namespace fabgl {
     I_BGE(2, 1), \
     WRITE_DAT(ps2port, 0)
 
+#else
+
+#define WRITE_DAT_R0(ps2port) \
+    I_BL(3, 1), \
+    WRITE_DAT(ps2port, 1), \
+    I_BE(2, 1), \
+    WRITE_DAT(ps2port, 0)
+
+#define M_BGE(label,value) \
+    M_BRANCH (label), \
+    I_BE (0,value), \
+    M_BRANCH (label), \
+    I_BG (0,value)
+
+#endif
 // performs [addr] = value
 // changes: R0, R1
 #define MEM_WRITEI(addr, value) \
@@ -210,18 +229,21 @@ namespace fabgl {
     I_LD(R0, R0, 0), \
     M_BL(label, value)
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 // jump to "label" if [addr] >= value
 // changes: R0
 #define MEM_BGE(label, addr, value) \
     I_MOVI(R0, addr), \
     I_LD(R0, R0, 0), \
     M_BGE(label, value)
+#endif
 
 // long jump version of M_BGE
 #define M_LONG_BGE(label, value) \
     I_BL(2, value), \
     M_BX(label)
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 // long jump version of M_BL
 #define M_LONG_BL(label, value) \
     I_BGE(2, value), \
@@ -252,9 +274,19 @@ namespace fabgl {
 #define M_LONG_STAGEBGE(label_num, imm_value) \
     I_STAGEBL(2, imm_value), \
     M_BX(label_num)
-
 // ULP clock is 8MHz, so every cycle takes 0.125us and 1us = 8 cycles
 #define M_DELAY_US(us) I_DELAY(us * 8)
+    
+#else
+// long jump version of M_BL
+#define M_LONG_BL(label, value) \
+    I_BE(3, value), \
+    I_BG(2, value), \
+    M_BX(label)
+// ULP clock is 17,5MHz, cycle takes 0,057us, 1us = 17,5 cycles
+#define M_DELAY_US(us) I_DELAY(us * 18)
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////
@@ -290,9 +322,13 @@ namespace fabgl {
 #define RTCMEM_PORT0_RX_ENABLED     (RTCMEM_VARS_START + 14)  // 0 = port 0 not configured for RX, 1 = port 0 configured for RX
 #define RTCMEM_PORT1_RX_ENABLED     (RTCMEM_VARS_START + 15)  // 0 = port 1 not configured for RX, 1 = port 1 configured for RX
 
-#define RTCMEM_LASTVAR              (RTCMEM_VARS_START + 15)
+// debug variables
+#define RTCMEM_DEBUG_MAIN           (RTCMEM_VARS_START + 16)
+#define RTCMEM_DEBUG_SUB            (RTCMEM_VARS_START + 17)
 
+#define RTCMEM_LASTVAR              (RTCMEM_VARS_START + 17)
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 // RX maximum time between CLK cycles (reliable minimum is about 15)
 #define CLK_RX_TIMEOUT_VAL 100
 
@@ -301,7 +337,16 @@ namespace fabgl {
 
 // counter (R2) re-wake value
 #define WAKE_THRESHOLD     3000
+#else
+// RX maximum time between CLK cycles (reliable minimum is about 15)
+#define CLK_RX_TIMEOUT_VAL 200
 
+// TX maximum time between CLK cycles
+#define CLK_TX_TIMEOUT_VAL 2400    // fine tuned to work with PERIBOARD 409P
+
+// counter (R2) re-wake value
+#define WAKE_THRESHOLD     6000
+#endif
 
 // check RTC memory occupation
 #if RTCMEM_LASTVAR >= 0x800
@@ -310,7 +355,6 @@ namespace fabgl {
 
 
 // ULP program labels
-
 #define LABEL_WAIT_COMMAND             0
 
 #define LABEL_RX                       1
@@ -342,7 +386,22 @@ namespace fabgl {
 
 
 // Helpers
-
+#ifdef ULP_DEBUG
+#define DEBUG_SET_MAIN(value)             \
+  I_MOVI(R0, value),                      \
+  I_ST(R0, R3, RTCMEM_DEBUG_MAIN)         
+#define DEBUG_INC_MAIN(_imm)              \
+  I_LD (R0, R3, RTCMEM_DEBUG_MAIN),       \
+  I_ADDI(R0, R0, _imm),                   \
+  I_ST(R0, R3, RTCMEM_DEBUG_MAIN)         
+#define DEBUG_SET_SUB(value)              \
+  I_MOVI(R0, value),                      \
+  I_ST(R0, R3, RTCMEM_DEBUG_SUB)           
+#define DEBUG_INC_SUB(_imm)               \
+  I_LD (R0, R3, RTCMEM_DEBUG_SUB),        \
+  I_ADDI(R0, R0, _imm),                   \
+  I_ST(R0, R3, RTCMEM_DEBUG_SUB)          
+#endif
 // temporarily disable port 0
 // note: before disable check if it was enabled. If it wasn't enabled just exit.
 // changes: R0
@@ -420,7 +479,6 @@ namespace fabgl {
 
 
 const ulp_insn_t ULP_code[] = {
-
   // Stop ULP timer, not necessary because this routine never ends
   I_END(),
 
@@ -428,20 +486,15 @@ const ulp_insn_t ULP_code[] = {
   // I_LD(R#, R3, RTC_MEM_XX) instead of MEM_READR(), saving one instruction
   I_MOVI(R3, 0x0000),
 
-
   /////////////////////////////////////////////////////////////////////////////////////////////
   // Command wait main loop
-
 M_LABEL(LABEL_WAIT_COMMAND),
-
   // port 0 TX?
   I_LD(R0, R3, RTCMEM_PORT0_TX),
   M_BGE(LABEL_PORT0_TX, 1),                               // yes, jump to LABEL_PORT0_TX
-
   // port 0 enable RX?
   I_LD(R0, R3, RTCMEM_PORT0_RX_ENABLE),
   M_BGE(LABEL_PORT0_ENABLE_RX, 1),                        // yes, jump to LABEL_PORT0_ENABLE_RX
-
   // port 0 disable RX?
   I_LD(R0, R3, RTCMEM_PORT0_RX_DISABLE),
   M_BGE(LABEL_PORT0_STOP_RX, 1),                          // yes, jump to LABEL_PORT0_STOP_RX
@@ -449,11 +502,9 @@ M_LABEL(LABEL_WAIT_COMMAND),
   // port 1 TX?
   I_LD(R0, R3, RTCMEM_PORT1_TX),
   M_BGE(LABEL_PORT1_TX, 1),                               // yes, jump to LABEL_PORT1_TX
-
   // port 1 enable RX?
   I_LD(R0, R3, RTCMEM_PORT1_RX_ENABLE),
   M_BGE(LABEL_PORT1_ENABLE_RX, 1),                        // yes, jump to LABEL_PORT1_ENABLE_RX
-
   // port 1 disable RX?
   I_LD(R0, R3, RTCMEM_PORT1_RX_DISABLE),
   M_BGE(LABEL_PORT1_STOP_RX, 1),                          // yes, jump to LABEL_PORT1_STOP_RX
@@ -464,313 +515,227 @@ M_LABEL(LABEL_WAIT_COMMAND),
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_PORT0_ENABLE_RX - Configure port 0 as RX
-
 M_LABEL(LABEL_PORT0_ENABLE_RX),
-
   // set RX flag for port 0
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT0_RX_ENABLED),                  // [RTCMEM_PORT0_RX_ENABLED] = 1
-
   // Configure CLK and DAT as inputs
   CONFIGURE_CLK_INPUT(PS2_PORT0),
   CONFIGURE_DAT_INPUT(PS2_PORT0),
-
   // Reset command
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT0_RX_ENABLE),                   // [RTCMEM_PORT0_RX_ENABLE] = 0
-
+  // Continue
   M_BX(LABEL_RX),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_PORT1_ENABLE_RX - Configure port 1 as RX
-
 M_LABEL(LABEL_PORT1_ENABLE_RX),
-
   // set RX flag for port 1
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT1_RX_ENABLED),                  // [RTCMEM_PORT1_RX_ENABLED] = 1
-
   // Configure CLK and DAT as inputs
   CONFIGURE_CLK_INPUT(PS2_PORT1),
   CONFIGURE_DAT_INPUT(PS2_PORT1),
-
   // Reset command
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT1_RX_ENABLE),                   // [RTCMEM_PORT1_RX_ENABLE] = 0
-
   M_BX(LABEL_RX),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_PORT0_STOP_RX - Stop port 0 RX (drive CLK low)
-
 M_LABEL(LABEL_PORT0_STOP_RX),
-
   PERM_PORT0_DISABLE(),
-
   // Reset command
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT0_RX_DISABLE),                 // [RTCMEM_PORT0_RX_DISABLE] = 0
-
+  // continue
   M_BX(LABEL_RX),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_PORT1_STOP_RX - Stop port 1 RX (drive CLK low)
-
 M_LABEL(LABEL_PORT1_STOP_RX),
-
   PERM_PORT1_DISABLE(),
-
   // Reset command
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT1_RX_DISABLE),                 // [RTCMEM_PORT1_RX_DISABLE] = 0
-
+  // Continue
   M_BX(LABEL_RX),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_PORT0_TX - Send data
   // Port 0 is automatically enabled for RX at the end
-
 M_LABEL(LABEL_PORT0_TX),
-
   // Send the word in RTCMEM_PORT0_DATAOUT
-
   // put in R2 the word to send (10 bits: data, parity and stop bit)
   I_LD(R2, R3, RTCMEM_PORT0_DATAOUT),                  // R2 = [RTCMEM_PORT0_DATAOUT]
-
   // reset the bit counter (STAGE register: 0...7 = data0, 8 = parity, 9 = stop bit)
   I_STAGERSTI(),                                       // STAGE = 0
-
   // disable port 1?
   TEMP_PORT1_DISABLE(),
-
-  // maintain CLK and DAT low for 200us
+  // maintain CLK low for 200us
   CONFIGURE_CLK_OUTPUT(PS2_PORT0),
   WRITE_CLK(PS2_PORT0, 0),
   M_DELAY_US(200),
+  // bring DAT low
   CONFIGURE_DAT_OUTPUT(PS2_PORT0),
   WRITE_DAT(PS2_PORT0, 0),
-
-  // configure CLK as input
+  // configure CLK as input, wait for clock pulses from the keyboard
   CONFIGURE_CLK_INPUT(PS2_PORT0),
 
 M_LABEL(LABEL_PORT0_TX_NEXT_BIT),
-
-  // wait for CLK = LOW
-
+  // wait for CLK = LOW //
   // temporarily use R3 (which is 0) as timeout counter
   I_ADDI(R3, R3, 1),
   I_MOVR(R0, R3),
   M_BGE(LABEL_PORT0_TX_EXIT, CLK_TX_TIMEOUT_VAL),      // jump to LABEL_PORT0_TX_EXIT on CLK timeout
-
   // read CLK
   READ_CLK(PS2_PORT0),                                 // R0 = CLK
-
   // repeat if CLK is high
   M_BGE(LABEL_PORT0_TX_NEXT_BIT, 1),                   // jump to LABEL_PORT0_TX_NEXT_BIT if R0 >= 1
-
+  /////////////////////////
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // bit 10 is the ACK from keyboard, don't send anything, just bypass
   M_STAGEBGE(LABEL_PORT0_TX_WAIT_CLK_HIGH, 10),        // jump to LABEL_PORT0_TX_WAIT_CLK_HIGH if STAGE >= 10
-
   // CLK is LOW, we are ready to send the bit (LSB of R0)
   I_ANDI(R0, R2, 1),                                   // R0 = R2 & 1
   WRITE_DAT_R0(PS2_PORT0),                             // DAT = LSB of R0
 
 M_LABEL(LABEL_PORT0_TX_WAIT_CLK_HIGH),
-
-  // Wait for CLK = HIGH
-
+  // Wait for CLK = HIGH //
   // read CLK
   READ_CLK(PS2_PORT0),                                 // R0 = CLK
-
   // repeat if CLK is low
   M_BL(LABEL_PORT0_TX_WAIT_CLK_HIGH, 1),               // jump to LABEL_PORT0_TX_WAIT_CLK_HIGH if R0 < 1
-
+  /////////////////////////
   // shift the sending word 1 bit to the right (prepare next bit to send)
   I_RSHI(R2, R2, 1),                                   // R2 = R2 >> 1
-
   // increment bit count
   I_STAGEINCI(1),                                      // STAGE = STAGE + 1
-
   // end of word? if not send then another bit
   M_STAGEBL(LABEL_PORT0_TX_NEXT_BIT, 11),              // jump to LABEL_PORT0_TX_NEXT_BIT if STAGE < 11
 
 M_LABEL(LABEL_PORT0_TX_EXIT),
-
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // back to RX mode
   CONFIGURE_DAT_INPUT(PS2_PORT0),
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT0_RX_ENABLED),               // [RTCMEM_PORT0_RX_ENABLED] = 1
-
   // reset command field
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT0_TX),                       // [RTCMEM_PORT0_TX] = 0
-
   // re-enable port 1?
   TEMP_PORT1_ENABLE(),
-
   // from now R2 is used as CPU re-wake timeout
   I_MOVI(R2, 0),
-
   // go to command loop
-  M_BX(LABEL_RX),
+  M_BX(LABEL_RX),  
 
-
-  /////////////////////////////////////////////////////////////////////////////////////////////
-  // LABEL_PORT1_TX - Send data
-  // Port 1 is automatically enabled for RX at the end
-
+//   /////////////////////////////////////////////////////////////////////////////////////////////
+//   // LABEL_PORT1_TX - Send data
+//   // Port 1 is automatically enabled for RX at the end
 M_LABEL(LABEL_PORT1_TX),
-
   // Send the word in RTCMEM_PORT1_DATAOUT
-
   // put in R2 the word to send (10 bits: data, parity and stop bit)
   I_LD(R2, R3, RTCMEM_PORT1_DATAOUT),                  // R2 = [RTCMEM_PORT1_DATAOUT]
-
   // reset the bit counter (STAGE register: 0...7 = data0, 8 = parity, 9 = stop bit)
   I_STAGERSTI(),                                       // STAGE = 0
-
   // disable port 0?
   TEMP_PORT0_DISABLE(),
-
   // maintain CLK and DAT low for 200us
   CONFIGURE_CLK_OUTPUT(PS2_PORT1),
   WRITE_CLK(PS2_PORT1, 0),
   M_DELAY_US(200),
   CONFIGURE_DAT_OUTPUT(PS2_PORT1),
   WRITE_DAT(PS2_PORT1, 0),
-
   // configure CLK as input
   CONFIGURE_CLK_INPUT(PS2_PORT1),
 
 M_LABEL(LABEL_PORT1_TX_NEXT_BIT),
-
   // wait for CLK = LOW
-
   // temporarily use R3 (which is 0) as timeout counter
   I_ADDI(R3, R3, 1),
   I_MOVR(R0, R3),
   M_BGE(LABEL_PORT1_TX_EXIT, CLK_TX_TIMEOUT_VAL),      // jump to LABEL_PORT1_TX_EXIT on CLK timeout
-
   // read CLK
   READ_CLK(PS2_PORT1),                                 // R0 = CLK
-
   // repeat if CLK is high
   M_BGE(LABEL_PORT1_TX_NEXT_BIT, 1),                   // jump to LABEL_PORT1_TX_NEXT_BIT if R0 >= 1
-
-  // R3 is no more timeout counter, but variables base
+    // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // bit 10 is the ACK from keyboard, don't send anything, just bypass
   M_STAGEBGE(LABEL_PORT1_TX_WAIT_CLK_HIGH, 10),        // jump to LABEL_PORT1_TX_WAIT_CLK_HIGH if STAGE >= 10
-
   // CLK is LOW, we are ready to send the bit (LSB of R0)
   I_ANDI(R0, R2, 1),                                   // R0 = R2 & 1
   WRITE_DAT_R0(PS2_PORT1),                             // DAT = LSB of R0
 
 M_LABEL(LABEL_PORT1_TX_WAIT_CLK_HIGH),
-
   // Wait for CLK = HIGH
-
   // read CLK
   READ_CLK(PS2_PORT1),                                 // R0 = CLK
-
   // repeat if CLK is low
   M_BL(LABEL_PORT1_TX_WAIT_CLK_HIGH, 1),               // jump to LABEL_PORT1_TX_WAIT_CLK_HIGH if R0 < 1
-
   // shift the sending word 1 bit to the right (prepare next bit to send)
   I_RSHI(R2, R2, 1),                                   // R2 = R2 >> 1
-
   // increment bit count
   I_STAGEINCI(1),                                      // STAGE = STAGE + 1
-
   // end of word? if not send then another bit
   M_STAGEBL(LABEL_PORT1_TX_NEXT_BIT, 11),              // jump to LABEL_PORT1_TX_NEXT_BIT if STAGE < 11
 
 M_LABEL(LABEL_PORT1_TX_EXIT),
-
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // back to RX mode
   CONFIGURE_DAT_INPUT(PS2_PORT1),
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT1_RX_ENABLED),               // [RTCMEM_PORT1_RX_ENABLED] = 1
-
   // reset command field
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT1_TX),                       // [RTCMEM_PORT0_TX] = 0
-
   // re-enable port 0?
   TEMP_PORT0_ENABLE(),
-
   // from now R2 is used as CPU re-wake timeout
   I_MOVI(R2, 0),
-
   // go to command loop
   M_BX(LABEL_RX),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_PORT0_RX_CLK_TIMEOUT
 
 M_LABEL(LABEL_PORT0_RX_CLK_TIMEOUT),
-
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // disable port 0
   PERM_PORT0_DISABLE(),
-
   // re-enable port 1?
   TEMP_PORT1_ENABLE(),
-
   // set port 0 timeout flag
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT0_RX_CLK_TIMEOUT),
-
   I_WAKE(),
-
   // from now R2 is used as CPU re-wake timeout
   I_MOVI(R2, 0),
-
   M_BX(LABEL_RX),
 
-
-  /////////////////////////////////////////////////////////////////////////////////////////////
-  // LABEL_PORT1_RX_CLK_TIMEOUT
+//   /////////////////////////////////////////////////////////////////////////////////////////////
+//   // LABEL_PORT1_RX_CLK_TIMEOUT
 
 M_LABEL(LABEL_PORT1_RX_CLK_TIMEOUT),
-
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // disable port 1
   PERM_PORT1_DISABLE(),
-
   // re-enable port 0?
   TEMP_PORT0_ENABLE(),
-
   // set port 1 timeout flag
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT1_RX_CLK_TIMEOUT),
-
   I_WAKE(),
-
   // from now R2 is used as CPU re-wake timeout
   I_MOVI(R2, 0),
-
   //M_BX(LABEL_RX),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // LABEL_RX - Check for new data from port 0 and port 1
@@ -778,11 +743,9 @@ M_LABEL(LABEL_PORT1_RX_CLK_TIMEOUT),
   // After received data the port 0 remains disabled for RX.
 
 M_LABEL(LABEL_RX),
-
   // Check for RX from port 0?
   I_LD(R0, R3, RTCMEM_PORT0_RX_ENABLED),
   M_BGE(LABEL_PORT0_RX_CHECK_CLK, 1),                       // yes, jump to LABEL_PORT0_RX_CHECK_CLK
-
   // no, port 0 is not enabled, maybe we are waiting for an ack from SoC, increment and check the re-wake timeout counter (R2)
   I_ADDI(R2, R2, 1),                                        // R2 = R2 + 1 (increment counter)
   I_MOVR(R0, R2),
@@ -792,90 +755,67 @@ M_LABEL(LABEL_RX),
   M_BX(LABEL_RX_NEXT),                                      // check the other port
 
 M_LABEL(LABEL_PORT0_RX_CHECK_CLK),
-
   // read CLK
   READ_CLK(PS2_PORT0),                                      // R0 = CLK
-
   // CLK is low?
   M_BGE(LABEL_RX_NEXT, 1),                                  // no, jump to LABEL_RX_NEXT
-
   // yes, from here we are receiving data from port 0
-
   // reset state variables
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT0_DATAIN),                        // [RTCMEM_PORT0_DATAIN] = 0
-  I_STAGERSTI(),                                            // STAGE = 0 (STAGE is the bit count)
+  I_STAGERSTI(),                                       // STAGE = 0 (STAGE is the bit count)
   I_MOVI(R2, 0),                                            // R2 = 0 (R2 represents last read value from CLK)
-
   // disable port 1?
   TEMP_PORT1_DISABLE(),
-
   // CLK is low so jump directly to DAT capture without recheck
   M_BX(LABEL_PORT0_RX_CLK_IS_LOW),
 
 M_LABEL(LABEL_PORT0_RX_WAIT_LOOP),
-
   // temporarily use R3 (which is 0) as timeout counter
   I_ADDI(R3, R3, 1),
   I_MOVR(R0, R3),
   M_BGE(LABEL_PORT0_RX_CLK_TIMEOUT, CLK_RX_TIMEOUT_VAL),    // jump to LABEL_PORT0_RX_CLK_TIMEOUT on CLK timeout
-
   // read CLK
   READ_CLK(PS2_PORT0),                                      // R0 = CLK
-
   // CLK changed?
   I_SUBR(R1, R2, R0),                                       // R1 = R2 - R0
   M_BXZ(LABEL_PORT0_RX_WAIT_LOOP),                          // no, repeat to LABEL_PORT0_RX_WAIT_LOOP
-
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // update last bit received
   I_MOVR(R2, R0),                                           // R2 = R0
-
   // is CLK high?
   M_BGE(LABEL_PORT0_RX_CLK_IS_HIGH, 1),
 
 M_LABEL(LABEL_PORT0_RX_CLK_IS_LOW),
-
   // CLK is Low, capture DAT value
   READ_DAT(PS2_PORT0),                                      // R0 = DAT
-
   // merge with data word and shift right by 1 the received word
   I_LSHI(R0, R0, 11),                                       // R0 = R0 << 11
   I_LD(R1, R3, RTCMEM_PORT0_DATAIN),                        // R1 = [RTCMEM_PORT0_DATAIN]
   I_ORR(R1, R1, R0),                                        // R1 = R1 | R0
   I_RSHI(R1, R1, 1),                                        // R1 = R1 >> 1
   I_ST(R1, R3, RTCMEM_PORT0_DATAIN),                        // [RTCMEM_PORT0_DATAIN] = R1
-
   // repeat
   M_BX(LABEL_PORT0_RX_WAIT_LOOP),
 
 M_LABEL(LABEL_PORT0_RX_CLK_IS_HIGH),
-
   // increment bit count
-  I_STAGEINCI(1),                                           // STAGE = STAGE + 1
-
+  I_STAGEINCI(1),                                      // STAGE = STAGE + 1
   // end of word? if not get another bit
   M_STAGEBL(LABEL_PORT0_RX_WAIT_LOOP, 11),                  // jump to LABEL_PORT0_RX_WAIT_LOOP if STAGE < 11
-
   // End of word, disable port 0
   PERM_PORT0_DISABLE(),
-
   // set RX flag
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT0_RX),                            // [RTCMEM_PORT0_RX] = 1
-
   // re-enable port 1?
   TEMP_PORT1_ENABLE(),
-
   // don't check RTC_CNTL_RDY_FOR_WAKEUP_S of RTC_CNTL_LOW_POWER_ST_REG because it never gets active, due
   // the fact ULP never calls HALT or SoC is always active.
   I_WAKE(),
-
   // from now R2 is used as CPU re-wake timeout
   I_MOVI(R2, 0),
-
 
   /////////////////////////////////////////////////////////////////////////////////////////////
   // Check for new data from port 1
@@ -883,11 +823,9 @@ M_LABEL(LABEL_PORT0_RX_CLK_IS_HIGH),
   // After received data the port 0 remains disabled for RX.
 
 M_LABEL(LABEL_RX_NEXT),
-
   // Check for RX from port 1?
   I_LD(R0, R3, RTCMEM_PORT1_RX_ENABLED),
   M_BGE(LABEL_PORT1_RX_CHECK_CLK, 1),                       // yes, jump to LABEL_PORT1_RX_CHECK_CLK
-
   // no, port 1 is not enabled, maybe we are waiting for an ack from SoC, increment and check the re-wake timeout counter (R2)
   I_ADDI(R2, R2, 1),                                        // R2 = R2 + 1 (increment counter)
   I_MOVR(R0, R2),
@@ -897,97 +835,70 @@ M_LABEL(LABEL_RX_NEXT),
   M_BX(LABEL_WAIT_COMMAND),                                 // return to main loop
 
 M_LABEL(LABEL_PORT1_RX_CHECK_CLK),
-
   // read CLK
   READ_CLK(PS2_PORT1),                                      // R0 = CLK
-
   // CLK is low?
   M_LONG_BGE(LABEL_WAIT_COMMAND, 1),                        // no, jump to LABEL_WAIT_COMMAND
-
   // yes, from here we are receiving data from port 0
-
   // reset state variables
   I_MOVI(R0, 0),
   I_ST(R0, R3, RTCMEM_PORT1_DATAIN),                        // [RTCMEM_PORT1_DATAIN] = 0
-  I_STAGERSTI(),                                            // STAGE = 0 (STAGE is the bit count)
+  I_STAGERSTI(),                                       // STAGE = 0 (STAGE is the bit count)
   I_MOVI(R2, 0),                                            // R2 = 0 (R2 represents last read value from CLK)
-
   // disable port 0?
   TEMP_PORT0_DISABLE(),
-
   // CLK is low so jump directly to DAT capture without recheck
   M_BX(LABEL_PORT1_RX_CLK_IS_LOW),
 
 M_LABEL(LABEL_PORT1_RX_WAIT_LOOP),
-
   // temporarily use R3 (which is 0) as timeout counter
   I_ADDI(R3, R3, 1),
   I_MOVR(R0, R3),
-  M_BGE(LABEL_PORT1_RX_CLK_TIMEOUT, CLK_RX_TIMEOUT_VAL),    // jump to LABEL_PORT1_RX_CLK_TIMEOUT on CLK timeout
-
+  M_BGE(LABEL_PORT1_RX_CLK_TIMEOUT, CLK_RX_TIMEOUT_VAL),    // jump to LABEL_PORT1_RX_CLK_TIMEOUT on CLK timeout 
   // read CLK
   READ_CLK(PS2_PORT1),                                      // R0 = CLK
-
   // CLK changed?
   I_SUBR(R1, R2, R0),                                       // R1 = R2 - R0
   M_BXZ(LABEL_PORT1_RX_WAIT_LOOP),                          // no, repeat to LABEL_PORT1_RX_WAIT_LOOP
-
   // R3 is no more timeout counter, but variables base
   I_MOVI(R3, 0),
-
   // update last bit received
   I_MOVR(R2, R0),                                           // R2 = R0
-
   // is CLK high?
   M_BGE(LABEL_PORT1_RX_CLK_IS_HIGH, 1),
 
 M_LABEL(LABEL_PORT1_RX_CLK_IS_LOW),
-
   // CLK is Low, capture DAT value
   READ_DAT(PS2_PORT1),                                      // R0 = DAT
-
   // merge with data word and shift right by 1 the received word
   I_LSHI(R0, R0, 11),                                       // R0 = R0 << 11
   I_LD(R1, R3, RTCMEM_PORT1_DATAIN),                        // R1 = [RTCMEM_PORT1_DATAIN]
   I_ORR(R1, R1, R0),                                        // R1 = R1 | R0
   I_RSHI(R1, R1, 1),                                        // R1 = R1 >> 1
   I_ST(R1, R3, RTCMEM_PORT1_DATAIN),                        // [RTCMEM_PORT1_DATAIN] = R1
-
   // repeat
   M_BX(LABEL_PORT1_RX_WAIT_LOOP),
 
 M_LABEL(LABEL_PORT1_RX_CLK_IS_HIGH),
-
   // increment bit count
-  I_STAGEINCI(1),                                           // STAGE = STAGE + 1
-
-  // end of word? if not get another bit
-  M_STAGEBL(LABEL_PORT1_RX_WAIT_LOOP, 11),                  // jump to LABEL_PORT1_RX_WAIT_LOOP if STAGE < 11
-
+  I_STAGEINCI(1),                                      // STAGE = STAGE + 1
+  // end of word? if not send then another bit
+  M_STAGEBL(LABEL_PORT1_RX_WAIT_LOOP, 11),              // jump to LABEL_PORT1_RX_WAIT_LOOP if STAGE < 11
   // End of word, disable port 1
   PERM_PORT1_DISABLE(),
-
   // set RX flag
   I_MOVI(R0, 1),
   I_ST(R0, R3, RTCMEM_PORT1_RX),                            // [RTCMEM_PORT1_RX] = 1
-
   // re-enable port 0?
   TEMP_PORT0_ENABLE(),
-
   // don't check RTC_CNTL_RDY_FOR_WAKEUP_S of RTC_CNTL_LOW_POWER_ST_REG because it never gets active, due
   // the fact ULP never calls HALT or SoC is always active.
   I_WAKE(),
-
   // from now R2 is used as CPU re-wake timeout
   I_MOVI(R2, 0),
-
   // return to main loop
   M_BX(LABEL_WAIT_COMMAND),
-
 };
-
-
-
 
 // Allowed GPIOs: GPIO_NUM_0, GPIO_NUM_2, GPIO_NUM_4, GPIO_NUM_12, GPIO_NUM_13, GPIO_NUM_14, GPIO_NUM_15, GPIO_NUM_25, GPIO_NUM_26, GPIO_NUM_27, GPIO_NUM_32, GPIO_NUM_33
 // Not allowed from GPIO_NUM_34 to GPIO_NUM_39
@@ -1011,10 +922,12 @@ static void replace_placeholders(uint32_t prg_start, int size, bool port0Enabled
     CLK_rtc_gpio_num[0]  = port0_clkIO;
     CLK_rtc_gpio_reg[0]  = rtc_io_desc[port0_clkIO].reg;
     CLK_rtc_gpio_ie_s[0] = (uint32_t) ffs(rtc_io_desc[port0_clkIO].ie) - 1;
+    ets_printf ("rtc clk io: %d,%d,%d\n",CLK_rtc_gpio_num[0],CLK_rtc_gpio_reg[0],CLK_rtc_gpio_ie_s[0]);
     int port0_datIO = rtc_io_number_get(port0_datGPIO);
     DAT_rtc_gpio_num[0]  = port0_datIO;
     DAT_rtc_gpio_reg[0]  = rtc_io_desc[port0_datIO].reg;
     DAT_rtc_gpio_ie_s[0] = (uint32_t) ffs(rtc_io_desc[port0_datIO].ie) - 1;
+    ets_printf ("rtc dat io: %d,%d,%d\n",DAT_rtc_gpio_num[0],DAT_rtc_gpio_reg[0],DAT_rtc_gpio_ie_s[0]);
     #endif
   }
 
@@ -1041,8 +954,10 @@ static void replace_placeholders(uint32_t prg_start, int size, bool port0Enabled
   for (uint32_t i = 0; i < size; ++i) {
     ulp_insn_t * ins = (ulp_insn_t *) RTC_SLOW_MEM + i;
     if (ins->macro.opcode == OPCODE_PLACEHOLDER) {
+      //ets_printf ("found placeholder\n",port0_clkGPIO);
       int ps2port = ins->macro.unused;
       if ((port0Enabled && ps2port == 0) || (port1Enabled && ps2port == 1)) {
+        //ets_printf ("updating placeholder for port: %d\n",ps2port);
         ins->macro.unused = 0;
         switch (ins->macro.sub_opcode) {
           case SUB_OPCODE_DAT_ENABLE_OUTPUT:
@@ -1070,12 +985,15 @@ static void replace_placeholders(uint32_t prg_start, int size, bool port0Enabled
             *ins = (ulp_insn_t) I_RD_REG(RTC_GPIO_IN_REG, DAT_rtc_gpio_num[ps2port] + RTC_GPIO_IN_NEXT_S, DAT_rtc_gpio_num[ps2port] + RTC_GPIO_IN_NEXT_S);
             break;
           case SUB_OPCODE_WRITE_CLK:
-            *ins = (ulp_insn_t) I_WR_REG_BIT(RTC_GPIO_OUT_REG, CLK_rtc_gpio_num[ps2port] + RTC_GPIO_IN_NEXT_S, ins->macro.label);
+            *ins = (ulp_insn_t) I_WR_REG_BIT(RTC_GPIO_OUT_REG, CLK_rtc_gpio_num[ps2port] + RTC_GPIO_OUT_DATA_S, ins->macro.label);
             break;
           case SUB_OPCODE_WRITE_DAT:
-            *ins = (ulp_insn_t) I_WR_REG_BIT(RTC_GPIO_OUT_REG, DAT_rtc_gpio_num[ps2port] + RTC_GPIO_IN_NEXT_S, ins->macro.label);
+            *ins = (ulp_insn_t) I_WR_REG_BIT(RTC_GPIO_OUT_REG, DAT_rtc_gpio_num[ps2port] + RTC_GPIO_OUT_DATA_S, ins->macro.label);
             break;
         }
+      } else 
+      {
+        *ins = (ulp_insn_t) I_DELAY(0);
       }
     }
   }
@@ -1115,6 +1033,7 @@ PS2Controller::~PS2Controller()
 // Note: GPIO_UNUSED is a placeholder used to disable PS/2 port 1.
 void PS2Controller::begin(gpio_num_t port0_clkGPIO, gpio_num_t port0_datGPIO, gpio_num_t port1_clkGPIO, gpio_num_t port1_datGPIO)
 {
+  ESP_LOGI("FabGL", "PS2Controller::begin (%d,%d)",port0_clkGPIO,port0_datGPIO);
   // ULP stuff is always active, even when end() is called
   if (!s_initDone) {
 
@@ -1123,9 +1042,10 @@ void PS2Controller::begin(gpio_num_t port0_clkGPIO, gpio_num_t port0_datGPIO, gp
 
     if (s_portEnabled[0]) {
       if (!rtc_gpio_is_valid_gpio(port0_clkGPIO) || !rtc_gpio_is_valid_gpio(port0_datGPIO)) {
-        ESP_LOGE("FabGL", "Invalid PS/2 Port 0 pins");
+        ESP_LOGI("FabGL", "Invalid PS/2 Port 0 pins");
         s_portEnabled[0] = false;
       } else {
+        ESP_LOGI("FabGL", "PS2Controller::begin - enable port0 pins for RTC");
         rtc_gpio_init(port0_clkGPIO);
         rtc_gpio_init(port0_datGPIO);
       }
@@ -1133,9 +1053,10 @@ void PS2Controller::begin(gpio_num_t port0_clkGPIO, gpio_num_t port0_datGPIO, gp
 
     if (s_portEnabled[1]) {
       if (!rtc_gpio_is_valid_gpio(port1_clkGPIO) || !rtc_gpio_is_valid_gpio(port1_datGPIO)) {
-        ESP_LOGE("FabGL", "Invalid PS/2 Port 1 pins");
+        ESP_LOGI("FabGL", "Invalid PS/2 Port 1 pins");
         s_portEnabled[1] = false;
       } else {
+        ESP_LOGI("FabGL", "PS2Controller::begin - enable port1 pins for RTC");
         rtc_gpio_init(port1_clkGPIO);
         rtc_gpio_init(port1_datGPIO);
       }
@@ -1147,13 +1068,19 @@ void PS2Controller::begin(gpio_num_t port0_clkGPIO, gpio_num_t port0_datGPIO, gp
 
     // process, load and execute ULP program
     size_t size = sizeof(ULP_code) / sizeof(ulp_insn_t);
+#if CONFIG_IDF_TARGET_ESP32    
     ulp_process_macros_and_load_ex(RTCMEM_PROG_START, ULP_code, &size);         // convert macros to ULP code
+#elif CONFIG_IDF_TARGET_ESP32S3
+    ulp_process_macros_and_load(RTCMEM_PROG_START, ULP_code, &size);         // convert macros to ULP code
+#endif
     replace_placeholders(RTCMEM_PROG_START, size, s_portEnabled[0], port0_clkGPIO, port0_datGPIO, s_portEnabled[1], port1_clkGPIO, port1_datGPIO); // replace GPIO placeholders
-    //printf("prog size = %d\n", size);
+    ESP_LOGI("FABGL","prog size = %d\n", size);
     assert(size < RTCMEM_VARS_START && "ULP Program too long, increase RTCMEM_VARS_START");
 
+#if CONFIG_IDF_TARGET_ESP32
     REG_SET_FIELD(SENS_SAR_START_FORCE_REG, SENS_PC_INIT, RTCMEM_PROG_START);   // set entry point
     SET_PERI_REG_MASK(SENS_SAR_START_FORCE_REG, SENS_ULP_CP_FORCE_START_TOP);   // enable FORCE START
+#endif 
 
     for (int p = 0; p < 2; ++p) {
       RTC_SLOW_MEM[RTCMEM_PORT0_TX + p]         = 0;
@@ -1166,20 +1093,27 @@ void PS2Controller::begin(gpio_num_t port0_clkGPIO, gpio_num_t port0_datGPIO, gp
       s_portLock[p] = (s_portEnabled[p] ? xSemaphoreCreateRecursiveMutex() : nullptr);
       enableRX(p);
     }
-
+    RTC_SLOW_MEM[RTCMEM_DEBUG_MAIN]         = 0;
+    RTC_SLOW_MEM[RTCMEM_DEBUG_SUB]          = 0;
+#if CONFIG_IDF_TARGET_ESP32
     // ULP start
     SET_PERI_REG_MASK(SENS_SAR_START_FORCE_REG, SENS_ULP_CP_START_TOP);
-
     // install RTC interrupt handler (on ULP Wake() instruction)
     // note about ESP_INTR_FLAG_LEVEL2: this is necessary in order to work reliably with interrupt intensive VGATextController, when running on the same core
     // On some boards only core "1" can -read- RTC slow memory and receive interrupts, hence we have to force core 1.
     esp_intr_alloc_pinnedToCore(ETS_RTC_CORE_INTR_SOURCE, ESP_INTR_FLAG_LEVEL2, ULPWakeISR, nullptr, &s_ULPWakeISRHandle, 1);
     SET_PERI_REG_MASK(RTC_CNTL_INT_ENA_REG, RTC_CNTL_ULP_CP_INT_ENA);
-
+#elif CONFIG_IDF_TARGET_ESP32S3
+    ulpDump (0,size);
+    ESP_ERROR_CHECK (ulp_isr_register(ULPWakeISR, nullptr));
+    ESP_ERROR_CHECK (ulp_run (RTCMEM_PROG_START));
+#endif
+    ESP_LOGI("FabGL", "PS2Controller::begin - ULP running");
+        
     s_initDone = true;
 
   } else {
-
+    ESP_LOGI("FabGL", "PS2Controller::begin - already initialized");
     // ULP already initialized
     for (int p = 0; p < 2; ++p) {
       RTC_SLOW_MEM[RTCMEM_PORT0_TX + p]         = 0;
@@ -1270,8 +1204,10 @@ void PS2Controller::end()
 
 void PS2Controller::disableRX(int PS2Port)
 {
-  if (s_portEnabled[PS2Port])
+  if (s_portEnabled[PS2Port]) {
+    ESP_LOGI ("FabGL","disableRX(%d)",PS2Port);
     RTC_SLOW_MEM[RTCMEM_PORT0_RX_DISABLE + PS2Port] = 1;
+  }
 }
 
 
@@ -1279,8 +1215,10 @@ void PS2Controller::enableRX(int PS2Port)
 {
   if (s_portEnabled[PS2Port]) {
     // enable RX only if there is not data waiting
-    if (!dataAvailable(PS2Port))
+    if (!dataAvailable(PS2Port)) {
+      ESP_LOGI ("FabGL","enableRX(%d)",PS2Port);
       RTC_SLOW_MEM[RTCMEM_PORT0_RX_ENABLE + PS2Port] = 1;
+    }
   }
 }
 
@@ -1312,7 +1250,8 @@ int PS2Controller::getData(int PS2Port, int timeOutMS)
         r = -1;
     }
 
-    // ULP leaves RX disables whenever receives data or CLK timeout, so we need to enable it here
+    // ULP leaves RX disabled whenever receives data or CLK timeout, so we need to enable it here
+    //ESP_LOGI("FabGL","getData (%d) - enableRX",PS2Port);
     RTC_SLOW_MEM[RTCMEM_PORT0_RX_ENABLE + PS2Port] = 1;
 
   }
@@ -1325,6 +1264,7 @@ void PS2Controller::sendData(uint8_t data, int PS2Port)
 {
   if (s_portEnabled[PS2Port]) {
     RTC_SLOW_MEM[RTCMEM_PORT0_DATAOUT + PS2Port] = 0x200 | ((!calcParity(data) & 1) << 8) | data;  // 0x200 = stop bit. Start bit is not specified here.
+    ESP_LOGI("FabGL","sendData (%d,%d) - enableTX",PS2Port,data);
     RTC_SLOW_MEM[RTCMEM_PORT0_TX + PS2Port]      = 1;
   }
 }
@@ -1344,10 +1284,11 @@ void PS2Controller::unlock(int PS2Port)
 
 
 
+
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 void IRAM_ATTR PS2Controller::ULPWakeISR(void * arg)
 {
   uint32_t rtc_intr = READ_PERI_REG(RTC_CNTL_INT_ST_REG);
-
   if (rtc_intr & RTC_CNTL_SAR_INT_ST) {
 
     for (int p = 0; p < 2; ++p) {
@@ -1363,15 +1304,40 @@ void IRAM_ATTR PS2Controller::ULPWakeISR(void * arg)
         RTC_SLOW_MEM[RTCMEM_PORT0_RX_CLK_TIMEOUT + p] = 0;
       }
     }
-
   }
-
   // clear interrupt
   WRITE_PERI_REG(RTC_CNTL_INT_CLR_REG, rtc_intr);
 }
-
+#else
+void IRAM_ATTR PS2Controller::ULPWakeISR(void * arg)
+{
+    BaseType_t yield = 0;
+    //ets_printf (".");
+  
+    for (int p = 0; p < 2; ++p) {
+        if (RTC_SLOW_MEM[RTCMEM_PORT0_RX + p] & 0xffff) {
+          // RX
+          uint16_t d = RTC_SLOW_MEM[RTCMEM_PORT0_DATAIN + p] & 0xffff;
+          xQueueOverwriteFromISR(PS2Controller::s_dataIn[p], &d, &yield);
+          RTC_SLOW_MEM[RTCMEM_PORT0_RX + p] = 0;
+        } else if (RTC_SLOW_MEM[RTCMEM_PORT0_RX_CLK_TIMEOUT + p] & 0xffff) {
+          // CLK timeout
+          uint16_t d = 0xffff;
+          xQueueOverwriteFromISR(PS2Controller::s_dataIn[p], &d, &yield);
+          RTC_SLOW_MEM[RTCMEM_PORT0_RX_CLK_TIMEOUT + p] = 0;
+        }
+        #ifdef ULP_DEBUG
+        if (RTC_SLOW_MEM[RTCMEM_DEBUG_MAIN]) {
+          ets_printf ("%d.%d\n",RTC_SLOW_MEM[RTCMEM_DEBUG_MAIN],RTC_SLOW_MEM[RTCMEM_DEBUG_SUB]);
+        }
+        #endif
+    }
+    if (yield) {
+        portYIELD_FROM_ISR();
+    }
+}
+#endif
 
 } // end of namespace
 
 
-#endif

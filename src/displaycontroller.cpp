@@ -36,7 +36,6 @@
 #include "fabutils.h"
 #include "images/cursors.h"
 
-
 #pragma GCC optimize ("O2")
 
 

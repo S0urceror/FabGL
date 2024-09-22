@@ -324,12 +324,11 @@ bool Terminal::begin(BaseDisplayController * displayController, int maxColumns, 
   }
 
   m_keyboard = keyboard;
-  #ifndef CONFIG_IDF_TARGET_ESP32S3
+
   if (m_keyboard == nullptr && PS2Controller::initialized()) {
     // get default keyboard from PS/2 controller
     m_keyboard = PS2Controller::keyboard();
   }
-  #endif
 
   m_logStream = nullptr;
 

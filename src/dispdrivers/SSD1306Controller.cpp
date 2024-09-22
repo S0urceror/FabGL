@@ -36,7 +36,7 @@
 
 #include "fabutils.h"
 #include "SSD1306Controller.h"
-
+#include <rom/ets_sys.h>
 
 #pragma GCC optimize ("O2")
 
@@ -224,7 +224,6 @@ void SSD1306Controller::sendRefresh()
   Primitive p(PrimitiveCmd::Refresh, Rect(0, 0, m_viewPortWidth - 1, m_viewPortHeight - 1));
   addPrimitive(p);
 }
-
 
 bool SSD1306Controller::SSD1306_sendData(uint8_t * buf, int count, uint8_t ctrl)
 {

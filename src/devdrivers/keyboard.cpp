@@ -66,9 +66,7 @@ Keyboard::~Keyboard()
 
 void Keyboard::begin(bool generateVirtualKeys, bool createVKQueue, int PS2Port)
 {
-  #ifndef CONFIG_IDF_TARGET_ESP32S3
   PS2Device::begin(PS2Port);
-  #endif
 
   m_CTRL       = false;
   m_LALT       = false;
@@ -93,10 +91,8 @@ void Keyboard::begin(bool generateVirtualKeys, bool createVKQueue, int PS2Port)
 
 void Keyboard::begin(gpio_num_t clkGPIO, gpio_num_t dataGPIO, bool generateVirtualKeys, bool createVKQueue)
 {
-  #ifndef CONFIG_IDF_TARGET_ESP32S3
   PS2Controller::begin(clkGPIO, dataGPIO);
   PS2Controller::setKeyboard(this);
-  #endif
   begin(generateVirtualKeys, createVKQueue, 0);
 }
 
@@ -143,6 +139,7 @@ bool Keyboard::reset()
 
   // tries up to three times to reset keyboard
   for (int i = 0; i < 3; ++i) {
+    ESP_LOGI ("FabGL","Keyboard::reset - try (%d)",i);
     m_keyboardAvailable = send_cmdReset();
     if (m_keyboardAvailable)
       break;
@@ -181,11 +178,7 @@ bool Keyboard::setLEDs(bool numLock, bool capsLock, bool scrollLock)
   m_numLockLED    = numLock;
   m_capsLockLED   = capsLock;
   m_scrollLockLED = scrollLock;
-  #ifndef CONFIG_IDF_TARGET_ESP32S3
   return send_cmdLEDs(numLock, capsLock, scrollLock);
-  #else
-  return true;
-  #endif
 }
 
 
@@ -199,9 +192,7 @@ void Keyboard::getLEDs(bool * numLock, bool * capsLock, bool * scrollLock)
 
 void Keyboard::updateLEDs()
 {
-  #ifndef CONFIG_IDF_TARGET_ESP32S3
   send_cmdLEDs(m_NUMLOCK, m_CAPSLOCK, m_SCROLLLOCK);
-  #endif
   m_numLockLED    = m_NUMLOCK;
   m_capsLockLED   = m_CAPSLOCK;
   m_scrollLockLED = m_SCROLLLOCK;

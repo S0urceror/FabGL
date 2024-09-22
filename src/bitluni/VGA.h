@@ -1,7 +1,7 @@
 #ifndef VGA_H
 #define VGA_H
 
-#include "PinConfig.h"
+#include "../devdrivers/PinConfig.h"
 #include "Mode.h"
 #include "DMAVideoBuffer.h"
 #include <esp_intr_alloc.h>
@@ -14,7 +14,7 @@ class VGA
 	public:
 		VGA();
 		~VGA();
-		bool init(const PinConfig pins, const Mode mode, int bits);
+		bool init(const PinConfig pins, const Mode mode, int bits,bool double_buffer);
 		bool start();
 		bool show();
 		void clear(int rgb = 0);
