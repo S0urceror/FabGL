@@ -1,7 +1,41 @@
-# FabGL
-### **ESP32** Display Controller (VGA, Color NTSC/PAL Composite, I2C and SPI displays), PS/2 Mouse and Keyboard Controller, Graphics Library, Sound Engine, Graphical User Interface (GUI), Game/Emulation Engine and ANSI/VT Terminal
+# FabGL For ESP32S3
+### **ESP32S3** Display Controller (VGA), PS/2 Mouse and Keyboard Controller, Graphics Library, Graphical User Interface (GUI), Game/Emulation Engine and ANSI/VT Terminal
 
-**!!Define ```CONFIG_IDF_TARGET_ESP32S3``` to compile for ESP32 S3!!**
+=================================================================================
+**To use FabGL in ESP32S3:**
+Not compatible with Arduino IDE, please use PlatformIO or ESP-IDF.
+For PlatformIO please see platformio.ini file inside examples/VGA/SimpleTerminalOutS3 because src/devdrivers/VGA.cpp may fail in compilation if another ESP-IDF version used, also use the provided sdkconfig.esp32-s3-devkitc1-n16r8.
+
+Code Migration:
+In order to use this library with an example or with an existing program please:
+to init DisplayController use:
+``` 
+//Normally is fabgl::VGA8Controller
+fabgl::VGAControllerS3 DisplayController;
+//Define Pins of connection
+//                   -1,-1,-1,R2,R1,-1,-1,-1,-1,G2,G1,-1,-1,-1,B2,B1,  h, v
+const PinConfig pins(-1,-1,-1,5,4,  -1,-1,-1,-1,7,6,  -1,-1,-1,12,11,  14,13);
+void setup(){
+    ...
+    DisplayController.begin(pins);
+    DisplayController.setResolution(VGA_640x480_60Hz);
+    ...
+}
+```
+Also bitfixer in his first video shows that changing VGA_640x480_60Hz freq of 25.175MHz to 25MHz improves the image quality, if you need to change src/fabglconf.h line 246.
+```
+//#define VGA_640x480_60Hz "\"640x480@60Hz\" 25.175 640 656 752 800 480 490 492 525 -HSync -VSync"
+#define VGA_640x480_60Hz "\"640x480@60Hz\" 25 640 656 752 800 480 490 492 525 -HSync -VSync"
+```
+
+Thanks to:
+bitfixer for VGA implementation.
+bitluni for altern VGA implementation.
+S0urceror for adapting FabGL for ESP32S3
+fabian222005 for fixing errors and implement minor functions in VGAControllerS3.cpp
+
+Experimental:
+fabian222005 tried to implement Xiaolin Wu's line algorithm for antialiasing line draw (minor fails like weird colors in lines because the prepareTransPixel gets color of previous frame, and not of the background of line :( There are inside of dispdrivers with sufix .antialias )
 
 **[Please look here for full API documentation](http://www.fabglib.org)**
 
@@ -130,4 +164,3 @@ Finally, there is a sound engine, with multiple channels mixed to a mono output.
 
 
 [Donations]: https://github.com/fdivitto/FabGL/wiki/Donations
-[Boards]: https://github.com/fdivitto/FabGL/wiki/Boards

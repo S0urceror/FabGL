@@ -11,9 +11,11 @@
 #include <freertos/semphr.h>
 #include "PinConfig.h"
 #include "../dispdrivers/vgabasecontroller.h"
-
+#ifdef __cplusplus
+extern "C"{
+#endif // __cplusplus
 namespace fabgl {
-
+#pragma GCC optimize ("O2")
 class VGA {
 public:
 	VGA();
@@ -71,5 +73,7 @@ private:
 };
 
 }
-
+#ifdef __cplusplus
+}
+#endif // __cplusplus
 #endif // CONFIG_IDF_TARGET_ESP32S3

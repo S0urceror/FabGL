@@ -10,6 +10,9 @@ using namespace bitluni;
 #else
 #include "devdrivers/VGA.h"
 #endif
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 namespace fabgl 
 {
     class VGAControllerS3  : public BitmappedDisplayController
@@ -63,6 +66,8 @@ namespace fabgl
 
 
             uint8_t IRAM_ATTR preparePixel(RGB222 rgb);
+            uint8_t IRAM_ATTR preparePixel(RGBA2222 rgb);
+            uint8_t IRAM_ATTR preparePixel(RGB888 rgb);
             
             void rawCopyRow(int x1, int x2, int srcY, int dstY);
             inline uint8_t rawGetPixelInRow (int y,int x);
@@ -70,6 +75,8 @@ namespace fabgl
             bool convertModelineToTimings(char const * modeline, VGATimings * timings);
             
         private:
+            uint8_t IRAM_ATTR convert_rgb888_to_rgba2222(const RGB888 * value);
+            uint8_t IRAM_ATTR convert_rgba8888_to_rgba2222(const RGBA8888 * value);
             bool m_initialized;
             int m_colorCount;
             volatile int m_primitiveProcessingSuspended;
@@ -79,7 +86,8 @@ namespace fabgl
             TaskHandle_t redraw_task_handle;
             const UBaseType_t REDRAW_TASK_PRIORITY=2;
             VGATimings m_timings;
-            
+            // used to convert RGB888 to RGB222
+            static const uint8_t map888to2[256];
             #ifdef BITLUNI
             VGA vga;
             Mode mode;
@@ -92,5 +100,7 @@ namespace fabgl
     // 6 bit version, agon compatible
     static const PinConfig PIN_AGON_LIGHT(-1,-1,-1,15,16,  -1,-1,-1,-1,6,7,  -1,-1,-1,4,5,  17,18);
 }
-
+#ifdef __cplusplus
+}
+#endif // __cplusplus
 #endif //CONFIG_IDF_TARGET_ESP32S3

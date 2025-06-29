@@ -3,7 +3,7 @@
  
 fabgl::VGAControllerS3 displayController;
 fabgl::Terminal        Terminal;
-
+const PinConfig pins(-1,-1,-1,5,4,  -1,-1,-1,-1,7,6,  -1,-1,-1,12,11,  14,13);
 void setup() {
     neopixelWrite(RGB_BUILTIN,0,0,RGB_BRIGHTNESS/8); // Blue
     
@@ -15,10 +15,8 @@ void setup() {
     log_d("Total PSRAM: %d", ESP.getPsramSize());
     log_d("Free PSRAM: %d", ESP.getFreePsram());
     
-    displayController.begin(fabgl::VGAControllerS3_PIN_AGON_LIGHT);
-    //displayController.setResolution(Mode::MODE_1024x768x60);
-    //displayController.setResolution(Mode::MODE_800x600x60); 
-    displayController.setResolution(Mode::MODE_640x480x60);
+    displayController.begin(pins);
+    displayController.setResolution(VGA_640x480_60Hz);
  
     Terminal.begin(&displayController);
     //Terminal.setLogStream(Serial);  // DEBUG ONLY
