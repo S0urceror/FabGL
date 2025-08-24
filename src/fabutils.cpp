@@ -48,7 +48,7 @@ extern "C" {
 #include "soc/rtc.h"
 #include "esp_ipc.h"
 #include "soc/adc_channel.h"
-
+#include "esp_timer.h"
 #include "fabutils.h"
 #include "fabglconf.h"
 
@@ -176,7 +176,7 @@ ChipPackage getChipPackage()
 
 #endif
 
-
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 ////////////////////////////////////////////////////////////////////////////////////////////
 adc1_channel_t ADC1_GPIO2Channel(gpio_num_t gpio)
 {
@@ -201,7 +201,7 @@ adc1_channel_t ADC1_GPIO2Channel(gpio_num_t gpio)
       return ADC1_CHANNEL_0;
   }
 }
-
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////
 // configureGPIO

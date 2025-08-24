@@ -3,6 +3,8 @@
 #include "vgacontrollers3.h"
 #include "fabutils.h"
 #include "esp32s3/rom/ets_sys.h"
+#include "esp_timer.h"
+#include <math.h>
 
 namespace fabgl
 {
@@ -216,10 +218,10 @@ void VGAControllerS3::setResolution(char const * modeline, int viewPortWidth, in
 void VGAControllerS3::begin()
 {
     //ets_printf ("VGAControllerS3::begin()\r\n");
-    begin (PIN_AGON_LIGHT);
+    begin (PIN_VGA_AGON_LIGHT,1);
 }
 
-void VGAControllerS3::begin(PinConfig set_pins) 
+void VGAControllerS3::begin(PinConfig set_pins,BaseType_t coreID) 
 {
     //ets_printf ("VGAControllerS3::begin(PinConfig set_pins)\r\n");
     m_primitiveProcessingSuspended=0;
@@ -232,7 +234,7 @@ void VGAControllerS3::begin(PinConfig set_pins)
                             (void *)this,
                             REDRAW_TASK_PRIORITY,
                             &redraw_task_handle,
-                            1);
+                            coreID);
     //Give task handle to VGA controller
     //this will notify
     vga.setRedrawTask (redraw_task_handle);

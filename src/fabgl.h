@@ -307,13 +307,12 @@
     \defgroup Enumerations Enumerations
         Enumeration types
 */
-
-
 #include "fabutils.h"
 #include "fabfonts.h"
 #include "terminal.h"
 #include "displaycontroller.h"
 #include "dispdrivers/vgacontroller.h"
+#include "dispdrivers/vgacontrollers3.h"
 #include "dispdrivers/SSD1306Controller.h"
 #include "dispdrivers/TFTControllerSpecif.h"
 #include "dispdrivers/vgatextcontroller.h"
@@ -323,15 +322,16 @@
 #include "dispdrivers/vga16controller.h"
 #include "dispdrivers/vgadirectcontroller.h"
 #include "dispdrivers/cvbs16controller.h"
-#include "dispdrivers/vgacontrollers3.h"
 #include "fabui.h"
 #include "inputbox.h"
 #include "comdrivers/ps2controller.h"
 #include "comdrivers/tsi2c.h"
+#include "comdrivers/usbhost.h"
+#include "comdrivers/usbhiddriver.h"
+#include "comdrivers/serialport.h"
 #include "devdrivers/keyboard.h"
 #include "devdrivers/mouse.h"
 #include "devdrivers/DS3231.h"
-#include "comdrivers/serialport.h"
 #include "scene.h"
 #include "collisiondetector.h"
 #include "devdrivers/soundgen.h"

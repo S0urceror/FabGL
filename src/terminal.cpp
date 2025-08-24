@@ -3688,7 +3688,7 @@ void Terminal::consumeFabGLSeq()
       send(gpio_get_level(gpio) ? '1' : '0');
       break;
     }
-
+#ifndef CONFIG_IDF_TARGET_ESP32S3
     // Setup ADC
     // Seq:
     //    ESC FABGLEXT_STARTCODE FABGLEXTX_SETUPADC RESOLUTION ';' ATTENUATION ';' GPIONUM FABGLEXT_ENDCODE
@@ -3738,7 +3738,7 @@ void Terminal::consumeFabGLSeq()
       send(toupper(digit2hex(val & 0x00F)));
       break;
     }
-
+#endif
 #ifndef CONFIG_IDF_TARGET_ESP32S3
     // Sound
     // Seq:

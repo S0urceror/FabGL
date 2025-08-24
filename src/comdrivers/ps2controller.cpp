@@ -32,7 +32,9 @@
 #elif CONFIG_IDF_TARGET_ESP32S3
 #include "soc/rtc_cntl_reg.h"
 #include "esp32s3/ulp.h"
-//#include "ulp_debug.h"
+#if IDF_VERSION>514
+#include "register/soc/rtc_io_reg.h"
+#endif
 #endif
 #include "driver/rtc_io.h"
 #include "soc/sens_reg.h"

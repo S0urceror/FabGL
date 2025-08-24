@@ -41,7 +41,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 #include <driver/adc.h>
+#endif
 #include <esp_system.h>
 #include "sdmmc_cmd.h"
 // #include "soc/frc_timer_reg.h"
@@ -51,6 +53,11 @@
 #include "esp32s2/rom/lldesc.h"
 #elif CONFIG_IDF_TARGET_ESP32S3
 #include "esp32s3/rom/lldesc.h"
+#if IDF_VERSION>514
+#include "soc/gpio_num.h"
+#endif
+#include "hal/gpio_types.h"
+#include "driver/gpio.h"
 #elif CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/lldesc.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
@@ -1081,9 +1088,9 @@ inline __attribute__((always_inline)) uint32_t getCycleCount() {
  */
 void replacePathSep(char * path, char newSep);
 
-
+#ifndef CONFIG_IDF_TARGET_ESP32S3
 adc1_channel_t ADC1_GPIO2Channel(gpio_num_t gpio);
-
+#endif
 
 void esp_intr_alloc_pinnedToCore(int source, int flags, intr_handler_t handler, void * arg, intr_handle_t * ret_handle, int core);
 

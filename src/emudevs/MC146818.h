@@ -29,8 +29,6 @@
 
 #include "nvs_flash.h"
 #include "nvs.h"
-#include "esp_timer.h"
-
 #include "fabgl.h"
 
 

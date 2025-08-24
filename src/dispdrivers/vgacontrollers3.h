@@ -57,7 +57,7 @@ namespace fabgl
             //virtual void setResolution(int width,int height,int color_depth,bool double_buffer);
             void setResolution(VGATimings const& timings, int color_depth, bool doubleBuffered);
             #endif
-            void begin(PinConfig set_pins);
+            void begin(PinConfig set_pins,BaseType_t coreID);
             void end ();
             inline bool isInitialized() {return m_initialized;};
 
@@ -90,7 +90,11 @@ namespace fabgl
     };
 
     // 6 bit version, agon compatible
-    static const PinConfig PIN_AGON_LIGHT(-1,-1,-1,15,16,  -1,-1,-1,-1,6,7,  -1,-1,-1,4,5,  17,18);
+    static const PinConfig PIN_VGA_AGON_LIGHT(-1,-1,-1,15,16,  -1,-1,-1,-1,6,7,  -1,-1,-1,4,5,  17,18); // Agon Light
+    static const PinConfig PIN_VGA_HEXAGON_LIGHT(-1,-1,-1,15,16,  -1,-1,-1,-1,6,7,  -1,-1,-1,4,5,  8,18); // 6 bits colour, ESP32S3 test board
+    static const PinConfig PIN_VGA_HEXAGON(-1,7,6,5,4,  -1,-1,12,11,10,9,  -1,47,21,14,13,  8,46); // 12 bits colour
+    static const PinConfig PIN_VGA_HEXAGON_ALT(-1,-1,-1,4,5,  -1,-1,-1,-1,9,10,  -1,-1,-1,13,14,  8,46); // 6 bits colour, HexAgon board
+    
 }
 
 #endif //CONFIG_IDF_TARGET_ESP32S3

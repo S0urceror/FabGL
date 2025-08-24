@@ -22,8 +22,8 @@ public:
 	bool init(VGATimings const& timings, int bits, PinConfig pins, bool usePsram, bool doubleBuffering, bool bounceBuffering);
 	bool deinit();
 
-	inline TaskHandle_t getRedrawTask ();
-	inline void setRedrawTask(TaskHandle_t to_notify_task);
+	TaskHandle_t getRedrawTask ();
+	void setRedrawTask(TaskHandle_t to_notify_task);
 
 	// signal end of drawing and start of showing
 	void show();

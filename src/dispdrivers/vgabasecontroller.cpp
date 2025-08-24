@@ -24,8 +24,6 @@
  */
 #ifndef CONFIG_IDF_TARGET_ESP32S3
 
-
-
 #include <alloca.h>
 #include <stdarg.h>
 #include <math.h>
