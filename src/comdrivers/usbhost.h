@@ -1,5 +1,6 @@
 #pragma once
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -26,3 +27,5 @@ namespace fabgl
             void add_driver (USBDriver& driver);
     };
 } // namespace fabgl;
+
+#endif // CONFIG_IDF_TARGET_ESP32S3

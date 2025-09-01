@@ -1283,16 +1283,12 @@ public:
    */
   void setColorForAttribute(CharStyle attribute);
 
-#ifndef CONFIG_IDF_TARGET_ESP32S3
-
   /**
    * @brief Gets embedded sound generator
    *
    * @return SoundGenerator object
    */
   SoundGenerator * soundGenerator();
-
-#endif
 
   //// Delegates ////
 
@@ -1597,9 +1593,9 @@ private:
 
   // used by extGetIntParam(), extGetCmdParam(), extGetByteParam() to store next item (to avoid insertToInputQueue() which can cause dead-locks)
   int                       m_extNextCode; // -1 = no code
-#ifndef CONFIG_IDF_TARGET_ESP32S3
+
   SoundGenerator *          m_soundGenerator;
-#endif
+
   Sprite *                  m_sprites;
   int                       m_spritesCount;
 

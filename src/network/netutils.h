@@ -25,7 +25,7 @@
 
 
 #pragma once
-
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 
 
 /**
@@ -296,3 +296,4 @@ private:
 
 } // end of namespace
 
+#endif // CONFIG_IDF_TARGET_ESP32S3

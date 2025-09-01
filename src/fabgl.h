@@ -326,8 +326,10 @@
 #include "inputbox.h"
 #include "comdrivers/ps2controller.h"
 #include "comdrivers/tsi2c.h"
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 #include "comdrivers/usbhost.h"
 #include "comdrivers/usbhiddriver.h"
+#endif
 #include "comdrivers/serialport.h"
 #include "devdrivers/keyboard.h"
 #include "devdrivers/mouse.h"

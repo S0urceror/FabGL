@@ -1,5 +1,5 @@
 #pragma once
-
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 #include "fabutils.h"
 #include "usb/usb_host.h"
 #include "usbhost.h"
@@ -128,3 +128,4 @@ namespace fabgl
     };
 
 } // fabgl;
+#endif // CONFIG_IDF_TARGET_ESP32S3

@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
-
+#ifdef CONFIG_IDF_TARGET_ESP32S3
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -357,3 +357,5 @@ USBHIDDriver::USBHIDDriver()
 }
 
 } // namespace fabgl;
+
+#endif // CONFIG_IDF_TARGET_ESP32S3

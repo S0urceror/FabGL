@@ -47,6 +47,7 @@
 #include "esp32s2/rom/lldesc.h"
 #elif CONFIG_IDF_TARGET_ESP32S3
 #include "esp32s3/rom/lldesc.h"
+#include "driver/i2s_std.h"
 #elif CONFIG_IDF_TARGET_ESP32C3
 #include "esp32c3/rom/lldesc.h"
 #elif CONFIG_IDF_TARGET_ESP32H2
@@ -62,14 +63,21 @@
 
 namespace fabgl {
 
-
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#define FABGL_SOUNDGEN_DEFAULT_SAMPLE_RATE 48000
+#else
 #define FABGL_SOUNDGEN_DEFAULT_SAMPLE_RATE 16384
+#endif
 
-
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+// 48000/250; // sample buffer = 1/48000 * 250 = 5.2ms
+// setting 192 at 48KHz, generates 48000/192=250 interrupts per second
+#define FABGL_SOUNDGEN_SAMPLE_BUFFER_SIZE FABGL_SOUNDGEN_DEFAULT_SAMPLE_RATE/250 * 2 // stereo
+#else
 // DAC mode specific:
 // setting 64 at 16KHz, generates 16000/64=250 interrupts per second
 #define FABGL_SOUNDGEN_SAMPLE_BUFFER_SIZE 64
-
+#endif
 
 
 /** @brief Base abstract class for waveform generators. A waveform generator can be seen as an audio channel that will be mixed by SoundGenerator. */
@@ -335,6 +343,9 @@ enum class SoundGenMethod {
   DAC,             /**< Use DAC. Available on gpio 25 or 26. Very low resources occupation. */
   SigmaDelta,      /**< Use Sigma-Delta. Available on almost all GPIO pins. Requires a lot of CPU power for high sample rates. */
   Auto,            /**< Use DAC when video output is VGA, use SigmaDelta when video output is Composite. */
+  #ifdef CONFIG_IDF_TARGET_ESP32S3
+  I2S,             /**< Use I2S. Requires external I2S DAC. */
+  #endif
 };
 
 
@@ -494,15 +505,20 @@ private:
 
   static void ISRHandler(void * arg);     // used in DAC mode
   static void timerHandler(void * args);  // used in sigma-delta mode
+  static void i2s_handler(void* arg);     // used in I2S mode
 
-  void dac_init();
-  void sigmadelta_init();
   void detachNoSuspend(WaveformGenerator * value);
-  void setDMANode(int index, volatile uint16_t * buf, int len);
   void init();
   
   int getSample();
   
+  #ifndef CONFIG_IDF_TARGET_ESP32S3
+  void setDMANode(int index, volatile uint16_t * buf, int len);
+  void dac_init();
+  void sigmadelta_init();
+  #else
+  void i2s_init();
+  #endif
   #ifdef FABGL_EMULATED
   void sdl_init();
   static void SDLAudioCallback(void * data, Uint8 * buffer, int length);
@@ -510,27 +526,21 @@ private:
 
 
   WaveformGenerator * m_channels;
-
   uint16_t *          m_sampleBuffer[2];
-
   int8_t              m_volume;
-
   uint16_t            m_sampleRate;
-
   bool                m_play;
-  
   gpio_num_t          m_gpio;
-  
   intr_handle_t       m_isr_handle;
-  
   lldesc_t volatile * m_DMAChain;
-  
   SoundGenMethod      m_genMethod;
-  
   bool                m_initDone;
-  
   esp_timer_handle_t  m_timerHandle;
-  
+  #if CONFIG_IDF_TARGET_ESP32S3
+  i2s_chan_handle_t   m_i2s_tx_chan;
+  int                 m_sampleBufferIndex;
+  TaskHandle_t        m_i2s_task_handle;
+  #endif
   #ifdef FABGL_EMULATED
   SDL_AudioDeviceID   m_device;
   #endif

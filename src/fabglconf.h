@@ -75,7 +75,7 @@
 
 
 /** Stack size of the task that processes Terminal input stream. */
-#define FABGLIB_DEFAULT_TERMINAL_INPUT_CONSUMER_TASK_STACK_SIZE 2048
+#define FABGLIB_DEFAULT_TERMINAL_INPUT_CONSUMER_TASK_STACK_SIZE 4096
 
 
 /** Priority of the task that processes Terminal input stream. */

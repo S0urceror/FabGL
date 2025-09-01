@@ -1,6 +1,6 @@
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+
 #include "usbhost.h"
-
-
 #define DAEMON_TASK_PRIORITY    2
 #define CLASS_TASK_PRIORITY     3
 
@@ -17,7 +17,10 @@ static void host_lib_daemon_task(void *pArg)
     //ESP_LOGI(TAG, "Installing USB Host Library");
     usb_host_config_t host_config = {
         .skip_phy_setup = false,
-        .intr_flags = ESP_INTR_FLAG_LEVEL1
+        .root_port_unpowered = false,
+        .intr_flags = ESP_INTR_FLAG_LEVEL1,
+        .enum_filter_cb = NULL,
+        .fifo_settings_custom = {0, 0, 0}
     };
     ESP_ERROR_CHECK(usb_host_install(&host_config));
 
@@ -104,3 +107,5 @@ void USBHost::add_driver (USBDriver& driver)
 }
 
 } // namespace fabgl;
+
+#endif // CONFIG_IDF_TARGET_ESP32S3

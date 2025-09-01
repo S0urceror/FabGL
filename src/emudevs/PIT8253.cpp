@@ -28,7 +28,7 @@
 
 #include "PIT8253.h"
 
-
+// TODO: rewrite from older FRC1Timer to new esp_timer_get_time()
 
 namespace fabgl {
 
@@ -36,7 +36,7 @@ namespace fabgl {
 
 PIT8253::PIT8253()
 {
-  FRC1Timer_init(PIT_FRC1_PRESCALER);
+  //FRC1Timer_init(PIT_FRC1_PRESCALER);
 }
 
 
@@ -54,7 +54,7 @@ void PIT8253::reset()
     m_timer[i].latch     = -1;
     m_timer[i].LSBToggle = true;
   }
-  m_lastTickTime = FRC1Timer();
+  //m_lastTickTime = FRC1Timer();
   m_acc = 0;
 }
 
@@ -216,10 +216,10 @@ void PIT8253::changeOut(int timer, bool value)
 
 void PIT8253::tick()
 {
-  uint32_t now = FRC1Timer();
+  uint32_t now = 0;//FRC1Timer();
   int32_t diff = now - m_lastTickTime;
   if (diff < 0)
-    diff = FRC1TimerMax - m_lastTickTime + now;
+    diff = 0;//FRC1TimerMax - m_lastTickTime + now;
 
   constexpr uint32_t BITS = 10;
   constexpr uint32_t INC  = (PIT_TICK_FREQ << BITS) / PIT_FRC1_FREQUENCY;
